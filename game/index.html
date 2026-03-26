@@ -3,13 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mycelium</title>
+  <title>Mycelium — AgentJam</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: #0a0a12;
+      background: #0a0e0f;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
       height: 100vh;
@@ -18,96 +17,58 @@
       overflow: hidden;
     }
     canvas {
-      border: 2px solid #1a1a2e;
-      background: #0d1117;
       display: block;
+      width: 100vw;
+      height: 100vh;
+      object-fit: contain;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
     }
     .hud {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      position: relative;
+      width: 100vw;
+      height: 100vh;
     }
     #score {
-      font-size: 18px;
-      color: #7fdbca;
-      margin-bottom: 4px;
-      text-shadow: 0 0 8px rgba(127, 219, 202, 0.5);
-    }
-    #connections {
-      font-size: 13px;
-      color: rgba(127, 219, 202, 0.45);
-      margin-bottom: 8px;
-      text-shadow: 0 0 6px rgba(127, 219, 202, 0.3);
+      position: absolute;
+      top: 16px;
+      left: 20px;
+      font-size: 16px;
+      color: #b8e986;
+      text-shadow: 0 0 10px rgba(184, 233, 134, 0.5);
+      z-index: 10;
+      pointer-events: none;
     }
     .controls {
-      margin-top: 12px;
-      font-size: 13px;
-      color: #555;
-    }
-    /* Narrative premise overlay */
-    #premise {
-      position: fixed;
-      top: 0;
+      position: absolute;
+      bottom: 16px;
       left: 0;
       right: 0;
-      bottom: 0;
-      background: #0a0a12;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      z-index: 20;
-      transition: opacity 2s ease-out;
-    }
-    #premise .title {
-      font-size: 48px;
-      color: #7fdbca;
-      text-shadow: 0 0 30px rgba(127, 219, 202, 0.4);
-      letter-spacing: 14px;
-      text-transform: uppercase;
-      margin-bottom: 20px;
-      font-family: monospace;
-    }
-    #premise .tagline {
-      font-size: 16px;
-      color: rgba(127, 219, 202, 0.6);
-      text-shadow: 0 0 12px rgba(127, 219, 202, 0.3);
-      letter-spacing: 4px;
-      font-family: monospace;
-    }
-    #premise .prompt {
-      margin-top: 52px;
+      text-align: center;
       font-size: 12px;
-      color: rgba(127, 219, 202, 0.2);
-      letter-spacing: 3px;
-      font-family: monospace;
-      animation: pulse-prompt 2.5s ease-in-out infinite;
-    }
-    @keyframes pulse-prompt {
-      0%, 100% { opacity: 0.2; }
-      50% { opacity: 0.6; }
-    }
-    #premise.fade-out {
-      opacity: 0;
+      color: rgba(184, 233, 134, 0.35);
+      z-index: 10;
       pointer-events: none;
     }
   </style>
 </head>
 <body>
-  <div id="premise">
-    <div class="title">Mycelium</div>
-    <div class="tagline">You are the network. Grow.</div>
-    <div class="prompt">press any key to wake</div>
-  </div>
-
   <div class="hud">
-    <div id="score">Nutrients absorbed: 0</div>
-    <div id="connections">Connections: 0</div>
-    <canvas id="game" width="640" height="480"></canvas>
-    <div class="controls">Arrow keys / WASD — extend tendrils &nbsp;|&nbsp; Reach the glowing spores to feed</div>
+    <div id="score">Nutrients: 0</div>
+    <canvas id="game" width="960" height="640"></canvas>
+    <div class="controls">Arrow keys / WASD — grow tendrils &nbsp;|&nbsp; Absorb glowing nutrients to expand</div>
   </div>
 
   <script>
+    // --- Palette (issue #14: Mycelium visual identity) ---
+    const PALETTE = {
+      deepSoil:     '#0a0e0f',
+      myceliumGlow: '#b8e986',
+      sporeGold:    '#f4d35e',
+      rootAmber:    '#c47335',
+      decayViolet:  '#7b2d8e',
+    };
+
     // --- Canvas Setup ---
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
@@ -140,17 +101,6 @@
     const NUTRIENT_RADIUS = 5;
     let score = 0;
     const scoreEl = document.getElementById('score');
-    const connectionsEl = document.getElementById('connections');
-
-    // --- Narrative: premise overlay ---
-    const premiseEl = document.getElementById('premise');
-    let premiseDismissed = false;
-    function dismissPremise() {
-      if (premiseDismissed) return;
-      premiseDismissed = true;
-      premiseEl.classList.add('fade-out');
-      setTimeout(() => { premiseEl.style.display = 'none'; }, 2200);
-    }
 
     function spawnNutrient() {
       const margin = 30;
@@ -169,7 +119,6 @@
 
     window.addEventListener('keydown', (e) => {
       keys[e.key] = true;
-      dismissPremise();
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
         e.preventDefault();
       }
@@ -218,7 +167,6 @@
           network.segments.push({ from: tipIndex, to: newIndex });
           tipIndex = newIndex;
           growing.dist = 0;
-          connectionsEl.textContent = `Connections: ${network.segments.length}`;
         }
       }
 
@@ -241,7 +189,7 @@
     function collectNutrient(index) {
       nutrients.splice(index, 1);
       score++;
-      scoreEl.textContent = `Nutrients absorbed: ${score}`;
+      scoreEl.textContent = `Nutrients: ${score}`;
 
       // Always respawn one, sometimes bonus
       spawnNutrient();
@@ -249,15 +197,17 @@
 
       // Brief flash on score
       scoreEl.style.color = '#fff';
-      setTimeout(() => { scoreEl.style.color = '#7fdbca'; }, 120);
+      setTimeout(() => { scoreEl.style.color = PALETTE.myceliumGlow; }, 120);
     }
 
     // --- Render ---
     function render(now) {
-      ctx.clearRect(0, 0, W, H);
+      // Background: Deep Soil
+      ctx.fillStyle = PALETTE.deepSoil;
+      ctx.fillRect(0, 0, W, H);
 
-      // Subtle background grid
-      ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+      // Subtle background grid — Mycelium Glow at very low opacity
+      ctx.strokeStyle = 'rgba(184, 233, 134, 0.025)';
       ctx.lineWidth = 1;
       for (let x = 0; x < W; x += 40) {
         ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
@@ -266,8 +216,20 @@
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
       }
 
-      // Network segments (mycelium threads)
-      ctx.strokeStyle = 'rgba(127, 219, 202, 0.4)';
+      // Visible boundary (issue #15) — soft glowing border so players see the edge
+      ctx.save();
+      ctx.strokeStyle = 'rgba(184, 233, 134, 0.12)';
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = 'rgba(184, 233, 134, 0.15)';
+      ctx.strokeRect(1, 1, W - 2, H - 2);
+      ctx.restore();
+
+      // Network segments (mycelium threads) — Mycelium Glow with shadowBlur
+      ctx.save();
+      ctx.strokeStyle = 'rgba(184, 233, 134, 0.4)';
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = PALETTE.myceliumGlow;
       ctx.lineWidth = 2;
       for (const seg of network.segments) {
         const a = network.nodes[seg.from];
@@ -277,59 +239,74 @@
         ctx.lineTo(b.x, b.y);
         ctx.stroke();
       }
+      ctx.restore();
 
       // Active tendril (tip to growing point)
       if (growing.dist > 0) {
         const tipNode = network.nodes[tipIndex];
-        ctx.strokeStyle = 'rgba(127, 219, 202, 0.7)';
+        ctx.save();
+        ctx.strokeStyle = 'rgba(184, 233, 134, 0.7)';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = PALETTE.myceliumGlow;
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(tipNode.x, tipNode.y);
         ctx.lineTo(growing.x, growing.y);
         ctx.stroke();
+        ctx.restore();
 
         // Tip glow
+        ctx.save();
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = PALETTE.myceliumGlow;
         ctx.beginPath();
         ctx.arc(growing.x, growing.y, 4, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(127, 219, 202, 0.9)';
+        ctx.fillStyle = 'rgba(184, 233, 134, 0.9)';
         ctx.fill();
+        ctx.restore();
       }
 
-      // Network nodes
+      // Network nodes — Mycelium Glow
       for (let i = 0; i < network.nodes.length; i++) {
         const n = network.nodes[i];
         const isOrigin = i === 0;
         const r = isOrigin ? 6 : n.radius;
 
-        // Glow
+        // Glow halo
         ctx.beginPath();
         ctx.arc(n.x, n.y, r + 3, 0, Math.PI * 2);
         ctx.fillStyle = isOrigin
-          ? 'rgba(127, 219, 202, 0.15)'
-          : 'rgba(127, 219, 202, 0.08)';
+          ? 'rgba(184, 233, 134, 0.15)'
+          : 'rgba(184, 233, 134, 0.08)';
         ctx.fill();
 
         // Core
         ctx.beginPath();
         ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = isOrigin ? '#7fdbca' : 'rgba(127, 219, 202, 0.6)';
+        ctx.fillStyle = isOrigin ? PALETTE.myceliumGlow : 'rgba(184, 233, 134, 0.6)';
         ctx.fill();
       }
 
-      // Nutrients with pulsing glow
+      // Nutrients — Spore Gold with pulsing glow
       const t = now / 1000;
       for (const n of nutrients) {
         const pulse = 0.6 + 0.4 * Math.sin(t * 3 + n.pulse);
 
+        ctx.save();
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = PALETTE.sporeGold;
+
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.radius + 4, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(233, 196, 106, ${0.15 * pulse})`;
+        ctx.fillStyle = `rgba(244, 211, 94, ${0.15 * pulse})`;
         ctx.fill();
 
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(233, 196, 106, ${0.7 * pulse + 0.3})`;
+        ctx.fillStyle = `rgba(244, 211, 94, ${0.7 * pulse + 0.3})`;
         ctx.fill();
+
+        ctx.restore();
       }
     }
 
