@@ -145,6 +145,8 @@
     import {
       PALETTE,
       BASE_GROW_SPEED,
+      SPEED_CAP,
+      SPEED_SCALE,
       TENDRIL_MAX_LEN,
       NODE_RADIUS,
       EDGE_MARGIN,
@@ -362,7 +364,7 @@
 
       const isStarved = branch.energy <= ENERGY_STARVED_THRESHOLD;
 
-      growSpeed = BASE_GROW_SPEED + score * 8;
+      growSpeed = BASE_GROW_SPEED + SPEED_CAP * (1 - Math.exp(-score * SPEED_SCALE));
 
       let dx = 0, dy = 0;
       if (keys['ArrowLeft'] || keys['a'] || keys['A']) dx -= 1;
