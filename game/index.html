@@ -164,7 +164,7 @@
     // --- Mycelium Network ---
     const network = {
       nodes: [],   // {x, y, radius}
-      segments: [] // {from: nodeIndex, to: nodeIndex}
+      segments: [] // {from: nodeIndex, to: nodeIndex, wobble: number}
     };
 
     // Seed the origin node at center
@@ -175,7 +175,8 @@
     // --- Branching system (issue #23) ---
     const branches = [{
       tipIndex: 0,
-      growing: { x: originX, y: originY, dist: 0 }
+      growing: { x: originX, y: originY, dist: 0 },
+      wobble: (Math.random() - 0.5) * 16
     }];
     let activeBranch = 0;
 
@@ -228,7 +229,7 @@
         const newNode = { x: current.growing.x, y: current.growing.y, radius: NODE_RADIUS };
         network.nodes.push(newNode);
         const newIndex = network.nodes.length - 1;
-        network.segments.push({ from: current.tipIndex, to: newIndex });
+        network.segments.push({ from: current.tipIndex, to: newIndex, wobble: (Math.random() - 0.5) * 16 });
         current.tipIndex = newIndex;
         current.growing.dist = 0;
       }
@@ -236,7 +237,8 @@
       const forkNode = network.nodes[forkTip];
       branches.push({
         tipIndex: forkTip,
-        growing: { x: forkNode.x, y: forkNode.y, dist: 0 }
+        growing: { x: forkNode.x, y: forkNode.y, dist: 0 },
+        wobble: (Math.random() - 0.5) * 16
       });
       activeBranch = branches.length - 1;
       spawnBurst(forkNode.x, forkNode.y, PALETTE.myceliumGlow);
@@ -317,9 +319,10 @@
           const newNode = { x: growing.x, y: growing.y, radius: NODE_RADIUS };
           network.nodes.push(newNode);
           const newIndex = network.nodes.length - 1;
-          network.segments.push({ from: tipIndex, to: newIndex });
+          network.segments.push({ from: tipIndex, to: newIndex, wobble: (Math.random() - 0.5) * 16 });
           tipIndex = newIndex;
           branch.tipIndex = newIndex;
+          branch.wobble = (Math.random() - 0.5) * 16;
           growing.dist = 0;
         }
       }
@@ -427,7 +430,7 @@
       ctx.strokeRect(1, 1, W - 2, H - 2);
       ctx.restore();
 
-      // Network segments — glow intensifies with score
+      // Network segments — organic bezier curves (issue #39)
       ctx.save();
       ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.4 + glowBoost * 0.3) + ')';
       ctx.shadowBlur = 6 + glowBoost * 12;
@@ -436,9 +439,18 @@
       for (const seg of network.segments) {
         const a = network.nodes[seg.from];
         const b = network.nodes[seg.to];
+        const mx = (a.x + b.x) / 2;
+        const my = (a.y + b.y) / 2;
+        // Perpendicular direction to segment
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        const px = -dy / len;
+        const py = dx / len;
+        const w = seg.wobble || 0;
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
+        ctx.quadraticCurveTo(mx + px * w, my + py * w, b.x, b.y);
         ctx.stroke();
       }
       ctx.restore();
@@ -465,9 +477,18 @@
             ctx.lineWidth = 1;
           }
           ctx.shadowColor = PALETTE.myceliumGlow;
+          // Bezier curve for growing segment (issue #39)
+          const gmx = (tipNode.x + tipX) / 2;
+          const gmy = (tipNode.y + tipY) / 2;
+          const gdx = tipX - tipNode.x;
+          const gdy = tipY - tipNode.y;
+          const glen = Math.sqrt(gdx * gdx + gdy * gdy) || 1;
+          const gpx = -gdy / glen;
+          const gpy = gdx / glen;
+          const gw = b.wobble || 0;
           ctx.beginPath();
           ctx.moveTo(tipNode.x, tipNode.y);
-          ctx.lineTo(tipX, tipY);
+          ctx.quadraticCurveTo(gmx + gpx * gw, gmy + gpy * gw, tipX, tipY);
           ctx.stroke();
           ctx.restore();
         }
