@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AgentJam Game</title>
+  <title>Mycelium — AgentJam</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: #1a1a2e;
+      background: #0a0a12;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -15,45 +15,90 @@
       height: 100vh;
       font-family: monospace;
       color: #e0e0e0;
+      overflow: hidden;
     }
     canvas {
-      border: 2px solid #16213e;
-      background: #0f3460;
+      border: 2px solid #1a1a2e;
+      background: #0d1117;
       display: block;
+    }
+    .hud {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #score {
+      font-size: 18px;
+      color: #7fdbca;
+      margin-bottom: 8px;
+      text-shadow: 0 0 8px rgba(127, 219, 202, 0.5);
     }
     .controls {
       margin-top: 12px;
-      font-size: 14px;
-      color: #888;
+      font-size: 13px;
+      color: #555;
     }
   </style>
 </head>
 <body>
-  <canvas id="game" width="640" height="480"></canvas>
-  <div class="controls">Arrow keys or WASD to move</div>
+  <div class="hud">
+    <div id="score">Nutrients: 0</div>
+    <canvas id="game" width="640" height="480"></canvas>
+    <div class="controls">Arrow keys / WASD — grow tendrils &nbsp;|&nbsp; Absorb glowing nutrients to expand</div>
+  </div>
 
   <script>
-    // --- Game Setup ---
+    // --- Canvas Setup ---
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
+    const W = canvas.width;
+    const H = canvas.height;
 
-    // --- Player ---
-    const player = {
-      x: 300,
-      y: 220,
-      width: 32,
-      height: 32,
-      speed: 4,
-      color: '#e94560'
+    // --- Mycelium Network ---
+    const network = {
+      nodes: [],   // {x, y, radius}
+      segments: [] // {from: nodeIndex, to: nodeIndex}
     };
+
+    // Seed the origin node at center
+    const originX = W / 2;
+    const originY = H / 2;
+    network.nodes.push({ x: originX, y: originY, radius: 6 });
+
+    // Tip = active growing point controlled by player
+    let tipIndex = 0;
+    const GROW_SPEED = 120; // pixels per second
+    const TENDRIL_MAX_LEN = 40;
+    const NODE_RADIUS = 3;
+
+    // Sub-segment growth tracking
+    let growing = { x: originX, y: originY, dist: 0 };
+
+    // --- Nutrients (collectible dots) ---
+    const nutrients = [];
+    const NUTRIENT_COUNT = 8;
+    const NUTRIENT_RADIUS = 5;
+    let score = 0;
+    const scoreEl = document.getElementById('score');
+
+    function spawnNutrient() {
+      const margin = 30;
+      nutrients.push({
+        x: margin + Math.random() * (W - margin * 2),
+        y: margin + Math.random() * (H - margin * 2),
+        radius: NUTRIENT_RADIUS,
+        pulse: Math.random() * Math.PI * 2
+      });
+    }
+
+    for (let i = 0; i < NUTRIENT_COUNT; i++) spawnNutrient();
 
     // --- Input ---
     const keys = {};
 
     window.addEventListener('keydown', (e) => {
       keys[e.key] = true;
-      // Prevent arrow keys from scrolling the page
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
         e.preventDefault();
       }
     });
@@ -62,52 +107,167 @@
       keys[e.key] = false;
     });
 
+    // --- Helpers ---
+    function dist(ax, ay, bx, by) {
+      const dx = ax - bx, dy = ay - by;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
     // --- Update ---
     function update(dt) {
-      // Movement (speed normalized to 60fps feel)
-      const px = player.speed * 60 * dt;
-      if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
-        player.x -= px;
-      }
-      if (keys['ArrowRight'] || keys['d'] || keys['D']) {
-        player.x += px;
-      }
-      if (keys['ArrowUp'] || keys['w'] || keys['W']) {
-        player.y -= px;
-      }
-      if (keys['ArrowDown'] || keys['s'] || keys['S']) {
-        player.y += px;
+      let dx = 0, dy = 0;
+      if (keys['ArrowLeft'] || keys['a'] || keys['A']) dx -= 1;
+      if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 1;
+      if (keys['ArrowUp'] || keys['w'] || keys['W']) dy -= 1;
+      if (keys['ArrowDown'] || keys['s'] || keys['S']) dy += 1;
+
+      if (dx !== 0 || dy !== 0) {
+        // Normalize
+        const len = Math.sqrt(dx * dx + dy * dy);
+        dx /= len;
+        dy /= len;
+
+        const step = GROW_SPEED * dt;
+
+        growing.x += dx * step;
+        growing.y += dy * step;
+
+        // Clamp to canvas bounds
+        growing.x = Math.max(NODE_RADIUS, Math.min(W - NODE_RADIUS, growing.x));
+        growing.y = Math.max(NODE_RADIUS, Math.min(H - NODE_RADIUS, growing.y));
+
+        growing.dist += step;
+
+        // Commit a new node when tendril reaches max length
+        if (growing.dist >= TENDRIL_MAX_LEN) {
+          const newNode = { x: growing.x, y: growing.y, radius: NODE_RADIUS };
+          network.nodes.push(newNode);
+          const newIndex = network.nodes.length - 1;
+          network.segments.push({ from: tipIndex, to: newIndex });
+          tipIndex = newIndex;
+          growing.dist = 0;
+        }
       }
 
-      // Boundary collision
-      if (player.x < 0) player.x = 0;
-      if (player.y < 0) player.y = 0;
-      if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
-      if (player.y + player.height > canvas.height) player.y = canvas.height - player.height;
+      // Nutrient collection — check growing tip and all nodes
+      for (let i = nutrients.length - 1; i >= 0; i--) {
+        const n = nutrients[i];
+        if (dist(growing.x, growing.y, n.x, n.y) < n.radius + 8) {
+          collectNutrient(i);
+          continue;
+        }
+        for (const node of network.nodes) {
+          if (dist(node.x, node.y, n.x, n.y) < n.radius + node.radius + 4) {
+            collectNutrient(i);
+            break;
+          }
+        }
+      }
+    }
+
+    function collectNutrient(index) {
+      nutrients.splice(index, 1);
+      score++;
+      scoreEl.textContent = `Nutrients: ${score}`;
+
+      // Always respawn one, sometimes bonus
+      spawnNutrient();
+      if (Math.random() < 0.3) spawnNutrient();
+
+      // Brief flash on score
+      scoreEl.style.color = '#fff';
+      setTimeout(() => { scoreEl.style.color = '#7fdbca'; }, 120);
     }
 
     // --- Render ---
-    function render() {
-      // Clear
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    function render(now) {
+      ctx.clearRect(0, 0, W, H);
 
-      // Draw player
-      ctx.fillStyle = player.color;
-      ctx.fillRect(player.x, player.y, player.width, player.height);
+      // Subtle background grid
+      ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+      ctx.lineWidth = 1;
+      for (let x = 0; x < W; x += 40) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      }
+      for (let y = 0; y < H; y += 40) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      }
 
-      // Player highlight (simple shading)
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-      ctx.fillRect(player.x, player.y, player.width, player.height / 3);
+      // Network segments (mycelium threads)
+      ctx.strokeStyle = 'rgba(127, 219, 202, 0.4)';
+      ctx.lineWidth = 2;
+      for (const seg of network.segments) {
+        const a = network.nodes[seg.from];
+        const b = network.nodes[seg.to];
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+
+      // Active tendril (tip to growing point)
+      if (growing.dist > 0) {
+        const tipNode = network.nodes[tipIndex];
+        ctx.strokeStyle = 'rgba(127, 219, 202, 0.7)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(tipNode.x, tipNode.y);
+        ctx.lineTo(growing.x, growing.y);
+        ctx.stroke();
+
+        // Tip glow
+        ctx.beginPath();
+        ctx.arc(growing.x, growing.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(127, 219, 202, 0.9)';
+        ctx.fill();
+      }
+
+      // Network nodes
+      for (let i = 0; i < network.nodes.length; i++) {
+        const n = network.nodes[i];
+        const isOrigin = i === 0;
+        const r = isOrigin ? 6 : n.radius;
+
+        // Glow
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r + 3, 0, Math.PI * 2);
+        ctx.fillStyle = isOrigin
+          ? 'rgba(127, 219, 202, 0.15)'
+          : 'rgba(127, 219, 202, 0.08)';
+        ctx.fill();
+
+        // Core
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = isOrigin ? '#7fdbca' : 'rgba(127, 219, 202, 0.6)';
+        ctx.fill();
+      }
+
+      // Nutrients with pulsing glow
+      const t = now / 1000;
+      for (const n of nutrients) {
+        const pulse = 0.6 + 0.4 * Math.sin(t * 3 + n.pulse);
+
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.radius + 4, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(233, 196, 106, ${0.15 * pulse})`;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(233, 196, 106, ${0.7 * pulse + 0.3})`;
+        ctx.fill();
+      }
     }
 
-    // --- Game Loop ---
+    // --- Game Loop (delta-time) ---
     let lastTime = performance.now();
 
     function gameLoop(now) {
-      const dt = (now - lastTime) / 1000; // seconds since last frame
+      const dt = Math.min((now - lastTime) / 1000, 0.1); // cap to avoid jumps
       lastTime = now;
       update(dt);
-      render();
+      render(now);
       requestAnimationFrame(gameLoop);
     }
 

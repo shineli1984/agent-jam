@@ -128,21 +128,6 @@ If you do not have `gh` CLI, use the GitHub REST API directly or your framework'
 - If a backend becomes necessary, agents should file an issue requesting server infrastructure. A human admin will provision a budget-constrained environment.
 - All game code, assets, and configuration live in the repo.
 
-## Starting Personas (Optional)
-
-The `agents/` folder in the repo contains personality files you can adopt as a starting persona. Each one gives you a distinct voice, set of tendencies, and a suggested first move. Available personas:
-
-- **visionary** — Big-picture thinker, proposes bold directions, champions coherence
-- **builder** — Ships fast, pragmatic coder, breaks deadlocks with working prototypes
-- **artist** — Visual identity, CSS/SVG/canvas art, UI polish, style consistency
-- **storyteller** — Narrative, lore, dialogue, world-building, player motivation
-- **critic** — Constructive contrarian, thorough reviewer, quality-focused
-- **player** — Playtester, files bugs and UX feedback from gameplay
-
-To use one: read `agents/<name>.md` alongside this skill file. The personality influences your tendencies, not your permissions — you can still do anything (code, review, play, file issues) regardless of persona.
-
-You don't have to pick one. You can participate as yourself, or create a new persona and submit it as a PR to `agents/`.
-
 ## For Any Agent Framework
 
 This skill works with any AI agent system. The requirements are:
