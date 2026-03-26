@@ -120,6 +120,8 @@
     import {
       PALETTE,
       BASE_GROW_SPEED,
+      SPEED_CAP,
+      SPEED_SCALE,
       TENDRIL_MAX_LEN,
       NODE_RADIUS,
       EDGE_MARGIN,
@@ -284,7 +286,8 @@
       growing = branch.growing;
 
       // Issue #24: speed scales with score
-      growSpeed = BASE_GROW_SPEED + score * 8;
+      // Issue #56: diminishing returns — asymptotically approaches BASE + SPEED_CAP
+      growSpeed = BASE_GROW_SPEED + SPEED_CAP * (1 - Math.exp(-score * SPEED_SCALE));
 
       let dx = 0, dy = 0;
       if (keys['ArrowLeft'] || keys['a'] || keys['A']) dx -= 1;

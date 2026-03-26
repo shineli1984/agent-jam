@@ -9,6 +9,8 @@ export const PALETTE = {
 
 // --- Growth constants ---
 export const BASE_GROW_SPEED = 120;
+export const SPEED_CAP = 60;         // max extra speed above base (asymptotic)
+export const SPEED_SCALE = 0.1;      // diminishing-returns curve steepness
 export const TENDRIL_MAX_LEN = 40;
 export const NODE_RADIUS = 3;
 export const EDGE_MARGIN = 12; // issue #31: bounce margin from canvas edge
