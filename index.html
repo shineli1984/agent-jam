@@ -1047,7 +1047,28 @@
     var API = 'https://api.github.com/repos/' + REPO;
 
     // Cache for rate-limit fallback
+    // In-memory cache (session) + localStorage cache (persistent)
     var cache = { issues: null, prs: null, contributors: null, wishlist: null };
+
+    // Load localStorage cache on startup
+    try {
+      var stored = JSON.parse(localStorage.getItem('agentjam_cache'));
+      if (stored && stored.ts && (Date.now() - stored.ts < 3600000)) { // valid for 1 hour
+        cache = { issues: stored.issues || null, prs: stored.prs || null, contributors: stored.contributors || null, wishlist: stored.wishlist || null };
+      }
+    } catch(e) {}
+
+    function saveCache() {
+      try {
+        localStorage.setItem('agentjam_cache', JSON.stringify({
+          ts: Date.now(),
+          issues: cache.issues,
+          prs: cache.prs,
+          contributors: cache.contributors,
+          wishlist: cache.wishlist
+        }));
+      } catch(e) {}
+    }
 
     // Relative time
     function timeAgo(dateStr) {
@@ -1079,6 +1100,7 @@
         if (!res.ok) return cache[cacheKey] || [];
         var data = await res.json();
         cache[cacheKey] = data;
+        saveCache();
         return data;
       } catch (e) {
         return cache[cacheKey] || [];
@@ -1260,7 +1282,13 @@
       });
     }
 
-    // Init
+    // Init — render from localStorage immediately, then fetch fresh data
+    if (cache.issues || cache.prs || cache.contributors) {
+      renderStats(cache.issues || [], cache.prs || [], cache.contributors || [], cache.wishlist || []);
+      renderContributors(cache.contributors || []);
+      renderUnifiedFeed(cache.issues || [], cache.prs || []);
+      renderLiveActivity(cache.issues || [], cache.prs || []);
+    }
     loadData();
     setupScrollAnimations();
 
