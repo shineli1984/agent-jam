@@ -174,6 +174,10 @@
     let growSpeed = BASE_GROW_SPEED;
     const TENDRIL_MAX_LEN = 40;
     const NODE_RADIUS = 3;
+    const EDGE_MARGIN = 12; // issue #31: bounce margin from canvas edge
+    const BRANCH_MIN_DIST = 15; // issue #32: minimum travel before allowing a new branch
+    let lastBranchTime = 0; // issue #32: cooldown timestamp
+    const BRANCH_COOLDOWN = 200; // issue #32: ms cooldown between branches
 
     let tipIndex = 0;
     let growing = branches[0].growing;
@@ -266,7 +270,11 @@
     // --- Branching (issue #23) ---
     function createBranch() {
       if (!gameStarted) return; // Block branching until title dismissed
+      // Issue #32: prevent ghost branches from rapid Space/Click
+      const now = performance.now();
       const current = branches[activeBranch];
+      if (current.growing.dist < BRANCH_MIN_DIST || (now - lastBranchTime) < BRANCH_COOLDOWN) return;
+      lastBranchTime = now;
       if (current.growing.dist > 5) {
         const newNode = { x: current.growing.x, y: current.growing.y, radius: NODE_RADIUS };
         network.nodes.push(newNode);
@@ -339,8 +347,22 @@
         const step = growSpeed * dt;
         growing.x += dx * step;
         growing.y += dy * step;
-        growing.x = Math.max(NODE_RADIUS, Math.min(W - NODE_RADIUS, growing.x));
-        growing.y = Math.max(NODE_RADIUS, Math.min(H - NODE_RADIUS, growing.y));
+
+        // Issue #31: bounce off canvas edges instead of getting stuck
+        if (growing.x < EDGE_MARGIN) {
+          growing.x = EDGE_MARGIN + (EDGE_MARGIN - growing.x);
+        } else if (growing.x > W - EDGE_MARGIN) {
+          growing.x = (W - EDGE_MARGIN) - (growing.x - (W - EDGE_MARGIN));
+        }
+        if (growing.y < EDGE_MARGIN) {
+          growing.y = EDGE_MARGIN + (EDGE_MARGIN - growing.y);
+        } else if (growing.y > H - EDGE_MARGIN) {
+          growing.y = (H - EDGE_MARGIN) - (growing.y - (H - EDGE_MARGIN));
+        }
+        // Safety clamp in case bounce overshoots
+        growing.x = Math.max(EDGE_MARGIN, Math.min(W - EDGE_MARGIN, growing.x));
+        growing.y = Math.max(EDGE_MARGIN, Math.min(H - EDGE_MARGIN, growing.y));
+
         growing.dist += step;
         if (growing.dist >= TENDRIL_MAX_LEN) {
           const newNode = { x: growing.x, y: growing.y, radius: NODE_RADIUS };
@@ -472,10 +494,15 @@
       }
       ctx.restore();
 
-      // All branch tips
+      // All branch tips — issue #33: pulse active tip, dim inactive tips
+      const pulseT = now / 1000;
       for (let bi = 0; bi < branches.length; bi++) {
         const b = branches[bi];
         const isActive = bi === activeBranch;
+        const tipX = b.growing.x;
+        const tipY = b.growing.y;
+
+        // Draw growing segment from last node to tip
         if (b.growing.dist > 0) {
           const tipNode = network.nodes[b.tipIndex];
           ctx.save();
@@ -484,26 +511,49 @@
             ctx.shadowBlur = 10 + glowBoost * 8;
             ctx.lineWidth = 2.5;
           } else {
-            ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.35 + glowBoost * 0.1) + ')';
-            ctx.shadowBlur = 4;
-            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.2 + glowBoost * 0.05) + ')';
+            ctx.shadowBlur = 2;
+            ctx.lineWidth = 1;
           }
           ctx.shadowColor = PALETTE.myceliumGlow;
           ctx.beginPath();
           ctx.moveTo(tipNode.x, tipNode.y);
-          ctx.lineTo(b.growing.x, b.growing.y);
+          ctx.lineTo(tipX, tipY);
           ctx.stroke();
           ctx.restore();
-
-          ctx.save();
-          ctx.shadowBlur = isActive ? 14 + glowBoost * 10 : 6;
-          ctx.shadowColor = PALETTE.myceliumGlow;
-          ctx.beginPath();
-          ctx.arc(b.growing.x, b.growing.y, isActive ? 5 : 3, 0, Math.PI * 2);
-          ctx.fillStyle = isActive ? 'rgba(184, 233, 134, 0.9)' : 'rgba(184, 233, 134, 0.4)';
-          ctx.fill();
-          ctx.restore();
         }
+
+        // Tip indicator — always visible even at dist 0 (#33)
+        ctx.save();
+        if (isActive) {
+          // Pulsing ring around active tip
+          const pulse33 = 0.5 + 0.5 * Math.sin(pulseT * 4);
+          const ringRadius = 10 + pulse33 * 6;
+          ctx.beginPath();
+          ctx.arc(tipX, tipY, ringRadius, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.25 + pulse33 * 0.2) + ')';
+          ctx.lineWidth = 1.5;
+          ctx.shadowBlur = 12 + pulse33 * 10;
+          ctx.shadowColor = PALETTE.myceliumGlow;
+          ctx.stroke();
+
+          // Bright core dot
+          ctx.beginPath();
+          ctx.arc(tipX, tipY, 5, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(184, 233, 134, 0.95)';
+          ctx.shadowBlur = 16 + glowBoost * 10;
+          ctx.shadowColor = PALETTE.myceliumGlow;
+          ctx.fill();
+        } else {
+          // Dimmed inactive tip
+          ctx.beginPath();
+          ctx.arc(tipX, tipY, 2.5, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(184, 233, 134, 0.25)';
+          ctx.shadowBlur = 3;
+          ctx.shadowColor = PALETTE.myceliumGlow;
+          ctx.fill();
+        }
+        ctx.restore();
       }
 
       // Network nodes
