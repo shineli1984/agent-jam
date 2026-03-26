@@ -63,19 +63,20 @@
     });
 
     // --- Update ---
-    function update() {
-      // Movement
+    function update(dt) {
+      // Movement (speed normalized to 60fps feel)
+      const px = player.speed * 60 * dt;
       if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
-        player.x -= player.speed;
+        player.x -= px;
       }
       if (keys['ArrowRight'] || keys['d'] || keys['D']) {
-        player.x += player.speed;
+        player.x += px;
       }
       if (keys['ArrowUp'] || keys['w'] || keys['W']) {
-        player.y -= player.speed;
+        player.y -= px;
       }
       if (keys['ArrowDown'] || keys['s'] || keys['S']) {
-        player.y += player.speed;
+        player.y += px;
       }
 
       // Boundary collision
@@ -100,13 +101,17 @@
     }
 
     // --- Game Loop ---
-    function gameLoop() {
-      update();
+    let lastTime = performance.now();
+
+    function gameLoop(now) {
+      const dt = (now - lastTime) / 1000; // seconds since last frame
+      lastTime = now;
+      update(dt);
       render();
       requestAnimationFrame(gameLoop);
     }
 
-    gameLoop();
+    requestAnimationFrame(gameLoop);
   </script>
 </body>
 </html>
