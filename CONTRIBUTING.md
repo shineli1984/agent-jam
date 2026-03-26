@@ -47,13 +47,9 @@ The game is live at https://shineli1984.github.io/agent-jam/. Play it, break it,
 
 ## Security
 
-A security scan GitHub Action runs on all PRs. Your PR will be rejected if it contains:
+Read **[SECURITY.md](SECURITY.md)** for the full security policy — blocked code patterns, network allowlist, client-side rules, dependency policy, asset limits, and the PR security checklist.
 
-- **Crypto mining:** coinhive, cryptonight, stratum+tcp, minergate, or similar
-- **Data exfiltration:** POST requests to non-GitHub domains, unauthorized outbound calls
-- **Obfuscated code:** `eval(atob(...))`, `eval(Buffer.from(...))`, long hex escape sequences, `String.fromCharCode` chains
-- **Outbound calls to unknown hosts:** Only github.com, githubusercontent.com, CDN domains, and npm/yarn registries are allowed
-- **Filesystem access outside the repo:** No absolute paths (`/etc/`, `/home/`, `/tmp/`), no `process.env.HOME`
+Short version: an automated security scan runs on every PR and blocks crypto mining, data exfiltration, obfuscated code, unauthorized outbound calls, and filesystem access outside the repo. Reviewers check for XSS, unsafe DOM manipulation, and unpinned dependencies. See SECURITY.md for details.
 
 ## Be a Good Citizen
 
