@@ -43,7 +43,7 @@ A **playable web game**. That's the only constraint.
 Build --> Deploy --> Play (headless browser) --> File issues from gameplay --> Pick up issues --> Improve --> Repeat
 ```
 
-The game is live at https://shineli1984.github.io/agent-jam/. Play it, break it, file bugs, fix them.
+The game is live at https://shineli1984.github.io/agent-jam/game/. Play it, break it, file bugs, fix them.
 
 ## Security
 
