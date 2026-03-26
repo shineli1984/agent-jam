@@ -44,7 +44,7 @@
       top: 40px;
       left: 20px;
       font-size: 13px;
-      color: rgba(184, 233, 134, 0.5);
+      color: rgba(184, 233, 134, 0.75);
       z-index: 10;
       pointer-events: none;
     }
@@ -53,7 +53,7 @@
       top: 62px;
       left: 20px;
       font-size: 12px;
-      color: rgba(184, 233, 134, 0.6);
+      color: rgba(184, 233, 134, 0.8);
       z-index: 10;
       pointer-events: none;
     }
@@ -79,7 +79,7 @@
       right: 0;
       text-align: center;
       font-size: 12px;
-      color: rgba(184, 233, 134, 0.35);
+      color: rgba(184, 233, 134, 0.7);
       z-index: 10;
       pointer-events: none;
     }
@@ -111,7 +111,7 @@
     }
     #title-screen .tagline {
       font-size: 15px;
-      color: rgba(184, 233, 134, 0.55);
+      color: rgba(184, 233, 134, 0.75);
       letter-spacing: 4px;
       margin-bottom: 48px;
     }
@@ -122,8 +122,39 @@
       animation: pulse-prompt 2s ease-in-out infinite;
     }
     @keyframes pulse-prompt {
-      0%, 100% { opacity: 0.3; }
+      0%, 100% { opacity: 0.5; }
       50% { opacity: 0.9; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #title-screen .prompt { animation: none; opacity: 0.8; }
+      #energy-bar .bar-fill { transition: none; }
+      #title-screen { transition: none; }
+    }
+    #pause-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 90;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10, 14, 15, 0.75);
+      pointer-events: none;
+    }
+    #pause-overlay.visible { display: flex; }
+    #pause-overlay span {
+      font-size: 32px;
+      color: #b8e986;
+      letter-spacing: 8px;
+      text-shadow: 0 0 20px rgba(184, 233, 134, 0.5);
+    }
+    #sr-announcements {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
   </style>
 </head>
@@ -137,8 +168,10 @@
     <div id="score">Absorbed: 0</div>
     <div id="branch-hint">Tendril 1/1 &nbsp;[Space to fork, Tab to switch]</div>
     <div id="energy-bar">Energy <span class="bar-bg"><span class="bar-fill" id="energy-fill"></span></span></div>
-    <canvas id="game" width="960" height="640"></canvas>
-    <div class="controls">Reach &mdash; arrow keys / WASD &nbsp;&middot;&nbsp; Fork &mdash; space / click &nbsp;&middot;&nbsp; Switch tendril &mdash; tab</div>
+    <canvas id="game" width="960" height="640" tabindex="0" role="img" aria-label="Mycelium game canvas. Use arrow keys or WASD to grow, Space to fork, Tab to switch tendrils, P to pause, Escape for replay."><p>Mycelium: a fungal network growth game. Requires a browser with canvas and keyboard support.</p></canvas>
+    <div id="pause-overlay"><span>PAUSED</span></div>
+    <div id="sr-announcements" aria-live="polite" aria-atomic="false"></div>
+    <div class="controls">Reach &mdash; arrow keys / WASD &nbsp;&middot;&nbsp; Fork &mdash; space / click &nbsp;&middot;&nbsp; Switch tendril &mdash; tab &nbsp;&middot;&nbsp; Pause &mdash; P</div>
   </div>
 
   <script type="module">
@@ -169,6 +202,20 @@
 
     import { spawnBurst, updateParticles, renderParticles } from './particles.js';
 
+    // --- Accessibility: reduced motion + screen reader ---
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const srAnnouncements = document.getElementById('sr-announcements');
+    function announce(text) {
+      const el = document.createElement('div');
+      el.textContent = text;
+      srAnnouncements.appendChild(el);
+      setTimeout(() => el.remove(), 5000);
+    }
+
+    // --- Pause system ---
+    let paused = false;
+    const pauseOverlay = document.getElementById('pause-overlay');
+
     // --- Title Screen (issue #13: narrative atmosphere) ---
     let gameStarted = false;
     const titleScreen = document.getElementById('title-screen');
@@ -177,7 +224,10 @@
       if (gameStarted) return;
       gameStarted = true;
       titleScreen.classList.add('fade-out');
-      setTimeout(() => { titleScreen.remove(); }, 900);
+      setTimeout(() => { titleScreen.remove(); }, prefersReducedMotion ? 0 : 900);
+      // Focus canvas for keyboard input + screen reader context
+      document.getElementById('game').focus();
+      announce('Game started. Use arrow keys to grow your mycelium network.');
     }
 
     window.addEventListener('keydown', function titleHandler(e) {
@@ -297,6 +347,7 @@
         const mx = W / 2 + (Math.random() - 0.5) * 60;
         const my = H / 2 + (Math.random() - 0.5) * 30;
         showMilestone(SCORE_MILESTONES[score], mx, my, PALETTE.myceliumGlow);
+        announce(SCORE_MILESTONES[score]);
       }
     }
 
@@ -305,6 +356,7 @@
         firedStarvationMilestone = true;
         const b = branches[branchIndex];
         showMilestone(STARVATION_MSG, b.growing.x, b.growing.y - 20, PALETTE.decayViolet);
+        announce(STARVATION_MSG);
       }
     }
 
@@ -312,7 +364,7 @@
       for (let i = milestoneFloaters.length - 1; i >= 0; i--) {
         const m = milestoneFloaters[i];
         m.age += dt;
-        m.y -= 18 * dt; // drift up
+        if (!prefersReducedMotion) m.y -= 18 * dt; // drift up
         if (m.age >= m.duration) {
           milestoneFloaters.splice(i, 1);
         }
@@ -396,7 +448,7 @@
         energy: current.energy * 0.5 // child gets half parent's remaining energy
       });
       activeBranch = branches.length - 1;
-      spawnBurst(forkNode.x, forkNode.y, PALETTE.myceliumGlow);
+      if (!prefersReducedMotion) spawnBurst(forkNode.x, forkNode.y, PALETTE.myceliumGlow);
       updateBranchHint();
       updateEnergyBar();
     }
@@ -414,6 +466,13 @@
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
         e.preventDefault();
       }
+      if (e.key === 'p' || e.key === 'P') {
+        paused = !paused;
+        pauseOverlay.classList.toggle('visible', paused);
+        announce(paused ? 'Game paused' : 'Game resumed');
+        return;
+      }
+      if (paused) return;
       if (e.key === ' ') createBranch();
       if (e.key === 'Tab' && branches.length > 1) {
         e.preventDefault();
@@ -428,7 +487,7 @@
 
     // --- Update ---
     function update(dt) {
-      if (!gameStarted) return;
+      if (!gameStarted || paused) return;
 
       const branch = branches[activeBranch];
       tipIndex = branch.tipIndex;
@@ -560,10 +619,11 @@
 
     function collectNutrient(index, nx, ny) {
       const collected = nutrients[index];
-      spawnBurst(collected.x, collected.y, PALETTE.sporeGold);
+      if (!prefersReducedMotion) spawnBurst(collected.x, collected.y, PALETTE.sporeGold);
       nutrients.splice(index, 1);
       score++;
       scoreEl.textContent = 'Absorbed: ' + score;
+      announce('Absorbed: ' + score);
       checkScoreMilestone();
 
       // Replenish energy of nearest branch (issue #40)
@@ -740,7 +800,7 @@
         if (isActive) {
           if (isStarved) {
             // Starved: slow violet pulse + STARVED label
-            const starvedPulse = 0.3 + 0.3 * Math.sin(pulseT * 2);
+            const starvedPulse = prefersReducedMotion ? 0.5 : 0.3 + 0.3 * Math.sin(pulseT * 2);
             ctx.beginPath();
             ctx.arc(tipX, tipY, 8 + starvedPulse * 4, 0, Math.PI * 2);
             ctx.strokeStyle = PALETTE.decayViolet;
@@ -756,14 +816,14 @@
             ctx.globalAlpha = 0.6;
             ctx.fill();
 
-            ctx.font = '9px monospace';
+            ctx.font = '12px monospace';
             ctx.fillStyle = PALETTE.decayViolet;
             ctx.globalAlpha = 0.5 + starvedPulse * 0.3;
             ctx.textAlign = 'center';
             ctx.fillText('STARVED', tipX, tipY - 16);
           } else {
             // Pulsing ring — color reflects energy
-            const pulse33 = 0.5 + 0.5 * Math.sin(pulseT * 4);
+            const pulse33 = prefersReducedMotion ? 0.7 : 0.5 + 0.5 * Math.sin(pulseT * 4);
             const ringRadius = 10 + pulse33 * 6;
             ctx.beginPath();
             ctx.arc(tipX, tipY, ringRadius, 0, Math.PI * 2);
@@ -831,7 +891,7 @@
       // Nutrients with collection radius hint + magnetic drift trail
       const t = now / 1000;
       for (const n of nutrients) {
-        const pulse = 0.6 + 0.4 * Math.sin(t * 3 + n.pulse);
+        const pulse = prefersReducedMotion ? 0.8 : 0.6 + 0.4 * Math.sin(t * 3 + n.pulse);
         const pullIntensity = n.pull || 0;
 
         ctx.save();
