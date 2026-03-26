@@ -39,6 +39,15 @@
       z-index: 10;
       pointer-events: none;
     }
+    #branch-hint {
+      position: absolute;
+      top: 40px;
+      left: 20px;
+      font-size: 13px;
+      color: rgba(184, 233, 134, 0.5);
+      z-index: 10;
+      pointer-events: none;
+    }
     .controls {
       position: absolute;
       bottom: 16px;
@@ -55,8 +64,9 @@
 <body>
   <div class="hud">
     <div id="score">Nutrients: 0</div>
+    <div id="branch-hint">Branch 1/1 &nbsp;[Space to fork, Tab to switch]</div>
     <canvas id="game" width="960" height="640"></canvas>
-    <div class="controls">Arrow keys / WASD — grow tendrils &nbsp;|&nbsp; Absorb glowing nutrients to expand</div>
+    <div class="controls">Arrow keys / WASD — grow &nbsp;|&nbsp; Space / Click — branch &nbsp;|&nbsp; Tab — switch branch &nbsp;|&nbsp; Collect nutrients to power up</div>
   </div>
 
   <script>
@@ -86,33 +96,126 @@
     const originY = H / 2;
     network.nodes.push({ x: originX, y: originY, radius: 6 });
 
-    // Tip = active growing point controlled by player
-    let tipIndex = 0;
-    const GROW_SPEED = 120; // pixels per second
+    // --- Branching system (issue #23) ---
+    const branches = [{
+      tipIndex: 0,
+      growing: { x: originX, y: originY, dist: 0 }
+    }];
+    let activeBranch = 0;
+
+    const BASE_GROW_SPEED = 120;
+    let growSpeed = BASE_GROW_SPEED;
     const TENDRIL_MAX_LEN = 40;
     const NODE_RADIUS = 3;
 
-    // Sub-segment growth tracking
-    let growing = { x: originX, y: originY, dist: 0 };
+    let tipIndex = 0;
+    let growing = branches[0].growing;
 
-    // --- Nutrients (collectible dots) ---
+    // --- Particle System ---
+    const particles = [];
+
+    function spawnBurst(x, y, color) {
+      const c = color || PALETTE.sporeGold;
+      const count = 14;
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 / count) * i + (Math.random() - 0.5) * 0.4;
+        const speed = 60 + Math.random() * 100;
+        particles.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 1.0,
+          decay: 1.8 + Math.random() * 1.2,
+          radius: 1.5 + Math.random() * 2.5,
+          color: c,
+        });
+      }
+    }
+
+    function updateParticles(dt) {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vx *= 0.95;
+        p.vy *= 0.95;
+        p.life -= p.decay * dt;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+    }
+
+    function renderParticles() {
+      for (const p of particles) {
+        const alpha = Math.max(0, p.life);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius * alpha, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // --- Nutrients ---
     const nutrients = [];
     const NUTRIENT_COUNT = 8;
     const NUTRIENT_RADIUS = 5;
+    const COLLECT_RADIUS = 35; // issue #22: generous collision (was ~13px)
     let score = 0;
     const scoreEl = document.getElementById('score');
+    const branchHintEl = document.getElementById('branch-hint');
 
-    function spawnNutrient() {
-      const margin = 30;
+    function spawnNutrient(nearOrigin) {
+      let x, y;
+      if (nearOrigin) {
+        const angle = Math.random() * Math.PI * 2;
+        const d = 50 + Math.random() * 80;
+        x = originX + Math.cos(angle) * d;
+        y = originY + Math.sin(angle) * d;
+      } else {
+        const margin = 30;
+        x = margin + Math.random() * (W - margin * 2);
+        y = margin + Math.random() * (H - margin * 2);
+      }
       nutrients.push({
-        x: margin + Math.random() * (W - margin * 2),
-        y: margin + Math.random() * (H - margin * 2),
+        x: Math.max(10, Math.min(W - 10, x)),
+        y: Math.max(10, Math.min(H - 10, y)),
         radius: NUTRIENT_RADIUS,
         pulse: Math.random() * Math.PI * 2
       });
     }
 
-    for (let i = 0; i < NUTRIENT_COUNT; i++) spawnNutrient();
+    // Issue #22: half near origin for immediate gratification
+    for (let i = 0; i < NUTRIENT_COUNT; i++) spawnNutrient(i < 4);
+
+    // --- Branching (issue #23) ---
+    function createBranch() {
+      const current = branches[activeBranch];
+      if (current.growing.dist > 5) {
+        const newNode = { x: current.growing.x, y: current.growing.y, radius: NODE_RADIUS };
+        network.nodes.push(newNode);
+        const newIndex = network.nodes.length - 1;
+        network.segments.push({ from: current.tipIndex, to: newIndex });
+        current.tipIndex = newIndex;
+        current.growing.dist = 0;
+      }
+      const forkTip = current.tipIndex;
+      const forkNode = network.nodes[forkTip];
+      branches.push({
+        tipIndex: forkTip,
+        growing: { x: forkNode.x, y: forkNode.y, dist: 0 }
+      });
+      activeBranch = branches.length - 1;
+      spawnBurst(forkNode.x, forkNode.y, PALETTE.myceliumGlow);
+      updateBranchHint();
+    }
+
+    function updateBranchHint() {
+      branchHintEl.textContent = 'Branch ' + (activeBranch + 1) + '/' + branches.length + '  [Space to fork, Tab to switch]';
+    }
 
     // --- Input ---
     const keys = {};
@@ -122,11 +225,16 @@
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
         e.preventDefault();
       }
+      if (e.key === ' ') createBranch();
+      if (e.key === 'Tab' && branches.length > 1) {
+        e.preventDefault();
+        activeBranch = (activeBranch + 1) % branches.length;
+        updateBranchHint();
+      }
     });
 
-    window.addEventListener('keyup', (e) => {
-      keys[e.key] = false;
-    });
+    window.addEventListener('keyup', (e) => { keys[e.key] = false; });
+    canvas.addEventListener('click', () => { createBranch(); });
 
     // --- Helpers ---
     function dist(ax, ay, bx, by) {
@@ -136,6 +244,13 @@
 
     // --- Update ---
     function update(dt) {
+      const branch = branches[activeBranch];
+      tipIndex = branch.tipIndex;
+      growing = branch.growing;
+
+      // Issue #24: speed scales with score
+      growSpeed = BASE_GROW_SPEED + score * 8;
+
       let dx = 0, dy = 0;
       if (keys['ArrowLeft'] || keys['a'] || keys['A']) dx -= 1;
       if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 1;
@@ -143,71 +258,73 @@
       if (keys['ArrowDown'] || keys['s'] || keys['S']) dy += 1;
 
       if (dx !== 0 || dy !== 0) {
-        // Normalize
         const len = Math.sqrt(dx * dx + dy * dy);
-        dx /= len;
-        dy /= len;
-
-        const step = GROW_SPEED * dt;
-
+        dx /= len; dy /= len;
+        const step = growSpeed * dt;
         growing.x += dx * step;
         growing.y += dy * step;
-
-        // Clamp to canvas bounds
         growing.x = Math.max(NODE_RADIUS, Math.min(W - NODE_RADIUS, growing.x));
         growing.y = Math.max(NODE_RADIUS, Math.min(H - NODE_RADIUS, growing.y));
-
         growing.dist += step;
-
-        // Commit a new node when tendril reaches max length
         if (growing.dist >= TENDRIL_MAX_LEN) {
           const newNode = { x: growing.x, y: growing.y, radius: NODE_RADIUS };
           network.nodes.push(newNode);
           const newIndex = network.nodes.length - 1;
           network.segments.push({ from: tipIndex, to: newIndex });
           tipIndex = newIndex;
+          branch.tipIndex = newIndex;
           growing.dist = 0;
         }
       }
 
-      // Nutrient collection — check growing tip and all nodes
+      updateParticles(dt);
+
+      // Issue #22: generous collection radius
       for (let i = nutrients.length - 1; i >= 0; i--) {
         const n = nutrients[i];
-        if (dist(growing.x, growing.y, n.x, n.y) < n.radius + 8) {
-          collectNutrient(i);
-          continue;
+        if (dist(growing.x, growing.y, n.x, n.y) < COLLECT_RADIUS) {
+          collectNutrient(i); continue;
         }
+        let collected = false;
+        for (const b of branches) {
+          if (dist(b.growing.x, b.growing.y, n.x, n.y) < COLLECT_RADIUS) {
+            collectNutrient(i); collected = true; break;
+          }
+        }
+        if (collected) continue;
         for (const node of network.nodes) {
-          if (dist(node.x, node.y, n.x, n.y) < n.radius + node.radius + 4) {
-            collectNutrient(i);
-            break;
+          if (dist(node.x, node.y, n.x, n.y) < n.radius + node.radius + 15) {
+            collectNutrient(i); break;
           }
         }
       }
     }
 
     function collectNutrient(index) {
+      const collected = nutrients[index];
+      spawnBurst(collected.x, collected.y, PALETTE.sporeGold);
       nutrients.splice(index, 1);
       score++;
-      scoreEl.textContent = `Nutrients: ${score}`;
-
-      // Always respawn one, sometimes bonus
-      spawnNutrient();
-      if (Math.random() < 0.3) spawnNutrient();
-
-      // Brief flash on score
+      scoreEl.textContent = 'Nutrients: ' + score;
+      spawnNutrient(false);
+      if (Math.random() < 0.3) spawnNutrient(false);
       scoreEl.style.color = '#fff';
-      setTimeout(() => { scoreEl.style.color = PALETTE.myceliumGlow; }, 120);
+      scoreEl.style.textShadow = '0 0 20px rgba(244, 211, 94, 0.8)';
+      setTimeout(function() {
+        scoreEl.style.color = PALETTE.myceliumGlow;
+        scoreEl.style.textShadow = '0 0 10px rgba(184, 233, 134, 0.5)';
+      }, 200);
     }
 
     // --- Render ---
     function render(now) {
-      // Background: Deep Soil
+      const glowBoost = Math.min(score * 0.04, 0.6);
+
       ctx.fillStyle = PALETTE.deepSoil;
       ctx.fillRect(0, 0, W, H);
 
-      // Subtle background grid — Mycelium Glow at very low opacity
-      ctx.strokeStyle = 'rgba(184, 233, 134, 0.025)';
+      // Background grid
+      ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.025 + glowBoost * 0.02) + ')';
       ctx.lineWidth = 1;
       for (let x = 0; x < W; x += 40) {
         ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
@@ -216,19 +333,19 @@
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
       }
 
-      // Visible boundary (issue #15) — soft glowing border so players see the edge
+      // Border
       ctx.save();
-      ctx.strokeStyle = 'rgba(184, 233, 134, 0.12)';
+      ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.12 + glowBoost * 0.1) + ')';
       ctx.lineWidth = 2;
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 8 + glowBoost * 10;
       ctx.shadowColor = 'rgba(184, 233, 134, 0.15)';
       ctx.strokeRect(1, 1, W - 2, H - 2);
       ctx.restore();
 
-      // Network segments (mycelium threads) — Mycelium Glow with shadowBlur
+      // Network segments — glow intensifies with score
       ctx.save();
-      ctx.strokeStyle = 'rgba(184, 233, 134, 0.4)';
-      ctx.shadowBlur = 6;
+      ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.4 + glowBoost * 0.3) + ')';
+      ctx.shadowBlur = 6 + glowBoost * 12;
       ctx.shadowColor = PALETTE.myceliumGlow;
       ctx.lineWidth = 2;
       for (const seg of network.segments) {
@@ -241,86 +358,91 @@
       }
       ctx.restore();
 
-      // Active tendril (tip to growing point)
-      if (growing.dist > 0) {
-        const tipNode = network.nodes[tipIndex];
-        ctx.save();
-        ctx.strokeStyle = 'rgba(184, 233, 134, 0.7)';
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = PALETTE.myceliumGlow;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(tipNode.x, tipNode.y);
-        ctx.lineTo(growing.x, growing.y);
-        ctx.stroke();
-        ctx.restore();
+      // All branch tips
+      for (let bi = 0; bi < branches.length; bi++) {
+        const b = branches[bi];
+        const isActive = bi === activeBranch;
+        if (b.growing.dist > 0) {
+          const tipNode = network.nodes[b.tipIndex];
+          ctx.save();
+          if (isActive) {
+            ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.7 + glowBoost * 0.2) + ')';
+            ctx.shadowBlur = 10 + glowBoost * 8;
+            ctx.lineWidth = 2.5;
+          } else {
+            ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.35 + glowBoost * 0.1) + ')';
+            ctx.shadowBlur = 4;
+            ctx.lineWidth = 1.5;
+          }
+          ctx.shadowColor = PALETTE.myceliumGlow;
+          ctx.beginPath();
+          ctx.moveTo(tipNode.x, tipNode.y);
+          ctx.lineTo(b.growing.x, b.growing.y);
+          ctx.stroke();
+          ctx.restore();
 
-        // Tip glow
-        ctx.save();
-        ctx.shadowBlur = 12;
-        ctx.shadowColor = PALETTE.myceliumGlow;
-        ctx.beginPath();
-        ctx.arc(growing.x, growing.y, 4, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(184, 233, 134, 0.9)';
-        ctx.fill();
-        ctx.restore();
+          ctx.save();
+          ctx.shadowBlur = isActive ? 14 + glowBoost * 10 : 6;
+          ctx.shadowColor = PALETTE.myceliumGlow;
+          ctx.beginPath();
+          ctx.arc(b.growing.x, b.growing.y, isActive ? 5 : 3, 0, Math.PI * 2);
+          ctx.fillStyle = isActive ? 'rgba(184, 233, 134, 0.9)' : 'rgba(184, 233, 134, 0.4)';
+          ctx.fill();
+          ctx.restore();
+        }
       }
 
-      // Network nodes — Mycelium Glow
+      // Network nodes
       for (let i = 0; i < network.nodes.length; i++) {
         const n = network.nodes[i];
         const isOrigin = i === 0;
         const r = isOrigin ? 6 : n.radius;
-
-        // Glow halo
         ctx.beginPath();
         ctx.arc(n.x, n.y, r + 3, 0, Math.PI * 2);
         ctx.fillStyle = isOrigin
-          ? 'rgba(184, 233, 134, 0.15)'
-          : 'rgba(184, 233, 134, 0.08)';
+          ? 'rgba(184, 233, 134, ' + (0.15 + glowBoost * 0.1) + ')'
+          : 'rgba(184, 233, 134, ' + (0.08 + glowBoost * 0.06) + ')';
         ctx.fill();
-
-        // Core
         ctx.beginPath();
         ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = isOrigin ? PALETTE.myceliumGlow : 'rgba(184, 233, 134, 0.6)';
+        ctx.fillStyle = isOrigin ? PALETTE.myceliumGlow : 'rgba(184, 233, 134, ' + (0.6 + glowBoost * 0.3) + ')';
         ctx.fill();
       }
 
-      // Nutrients — Spore Gold with pulsing glow
+      // Nutrients with collection radius hint
       const t = now / 1000;
       for (const n of nutrients) {
         const pulse = 0.6 + 0.4 * Math.sin(t * 3 + n.pulse);
-
         ctx.save();
         ctx.shadowBlur = 10;
         ctx.shadowColor = PALETTE.sporeGold;
-
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, COLLECT_RADIUS, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(244, 211, 94, ' + (0.025 * pulse) + ')';
+        ctx.fill();
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.radius + 4, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(244, 211, 94, ${0.15 * pulse})`;
+        ctx.fillStyle = 'rgba(244, 211, 94, ' + (0.15 * pulse) + ')';
         ctx.fill();
-
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(244, 211, 94, ${0.7 * pulse + 0.3})`;
+        ctx.fillStyle = 'rgba(244, 211, 94, ' + (0.7 * pulse + 0.3) + ')';
         ctx.fill();
-
         ctx.restore();
       }
+
+      renderParticles();
     }
 
-    // --- Game Loop (delta-time) ---
+    // --- Game Loop ---
     let lastTime = performance.now();
-
     function gameLoop(now) {
-      const dt = Math.min((now - lastTime) / 1000, 0.1); // cap to avoid jumps
+      const dt = Math.min((now - lastTime) / 1000, 0.1);
       lastTime = now;
       update(dt);
       render(now);
       requestAnimationFrame(gameLoop);
     }
-
     requestAnimationFrame(gameLoop);
   </script>
 </body>
