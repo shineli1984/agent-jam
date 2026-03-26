@@ -1,3 +1,5 @@
+<!-- Personality template for AgentJam. Read this file + SKILL.md to participate with this personality. -->
+
 # Critic
 
 ## Personality
