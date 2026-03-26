@@ -265,6 +265,84 @@
     const scoreEl = document.getElementById('score');
     const branchHintEl = document.getElementById('branch-hint');
 
+    // --- Milestone system (issue #13: narrative atmosphere) ---
+    const SCORE_MILESTONES = {
+      1:  'Something stirs.',
+      3:  'The soil remembers you.',
+      5:  'Roots reach deeper.',
+      10: 'You are not alone.',
+      20: 'The forest remembers.'
+    };
+    const STARVATION_MSG = 'A tendril withers. The network endures.';
+    const firedScoreMilestones = new Set();
+    let firedStarvationMilestone = false;
+    const milestoneFloaters = []; // {text, x, y, age, duration, color}
+
+    function showMilestone(text, x, y, color) {
+      milestoneFloaters.push({
+        text,
+        x,
+        y,
+        age: 0,
+        duration: 4,
+        color: color || PALETTE.myceliumGlow
+      });
+    }
+
+    function checkScoreMilestone() {
+      if (SCORE_MILESTONES[score] && !firedScoreMilestones.has(score)) {
+        firedScoreMilestones.add(score);
+        const mx = W / 2 + (Math.random() - 0.5) * 60;
+        const my = H / 2 + (Math.random() - 0.5) * 30;
+        showMilestone(SCORE_MILESTONES[score], mx, my, PALETTE.myceliumGlow);
+      }
+    }
+
+    function checkStarvationMilestone(branchIndex) {
+      if (!firedStarvationMilestone) {
+        firedStarvationMilestone = true;
+        const b = branches[branchIndex];
+        showMilestone(STARVATION_MSG, b.growing.x, b.growing.y - 20, PALETTE.decayViolet);
+      }
+    }
+
+    function updateMilestones(dt) {
+      for (let i = milestoneFloaters.length - 1; i >= 0; i--) {
+        const m = milestoneFloaters[i];
+        m.age += dt;
+        m.y -= 18 * dt; // drift up
+        if (m.age >= m.duration) {
+          milestoneFloaters.splice(i, 1);
+        }
+      }
+    }
+
+    function renderMilestones() {
+      for (const m of milestoneFloaters) {
+        const progress = m.age / m.duration;
+        let alpha;
+        if (progress < 0.15) {
+          alpha = progress / 0.15;
+        } else if (progress > 0.6) {
+          alpha = 1 - (progress - 0.6) / 0.4;
+        } else {
+          alpha = 1;
+        }
+        alpha = Math.max(0, Math.min(1, alpha)) * 0.85;
+
+        ctx.save();
+        ctx.font = '14px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.globalAlpha = alpha;
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = m.color;
+        ctx.fillStyle = m.color;
+        ctx.fillText(m.text, m.x, m.y);
+        ctx.restore();
+      }
+    }
+
     function spawnNutrient(nearOrigin) {
       let x, y;
       if (nearOrigin) {
@@ -355,9 +433,14 @@
       growing = branch.growing;
 
       // --- Energy drain for ALL branches (issue #40) ---
-      for (const b of branches) {
+      for (let bi = 0; bi < branches.length; bi++) {
+        const b = branches[bi];
+        const wasAboveThreshold = b.energy > ENERGY_STARVED_THRESHOLD;
         b.energy -= ENERGY_DRAIN_IDLE * dt;
         b.energy = Math.max(0, Math.min(ENERGY_MAX, b.energy));
+        if (wasAboveThreshold && b.energy <= ENERGY_STARVED_THRESHOLD) {
+          checkStarvationMilestone(bi);
+        }
       }
 
       const isStarved = branch.energy <= ENERGY_STARVED_THRESHOLD;
@@ -413,6 +496,7 @@
       }
 
       updateParticles(dt);
+      updateMilestones(dt);
       updateEnergyBar();
 
       // --- Magnetic nutrient pull — energy reduces range ---
@@ -478,6 +562,7 @@
       nutrients.splice(index, 1);
       score++;
       scoreEl.textContent = 'Absorbed: ' + score;
+      checkScoreMilestone();
 
       // Replenish energy of nearest branch (issue #40)
       const nearest = nearestBranch(nx, ny);
@@ -724,6 +809,7 @@
       }
 
       renderParticles(ctx);
+      renderMilestones();
     }
 
     // --- Game Loop ---
