@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mycelium — AgentJam</title>
+  <title>Mycelium</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -50,13 +50,61 @@
       z-index: 10;
       pointer-events: none;
     }
+    /* --- Title Screen Overlay --- */
+    #title-screen {
+      position: absolute;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10, 14, 15, 0.92);
+      pointer-events: auto;
+      transition: opacity 0.8s ease-out;
+    }
+    #title-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #title-screen h1 {
+      font-family: monospace;
+      font-size: 64px;
+      letter-spacing: 0.35em;
+      color: #b8e986;
+      text-shadow: 0 0 30px rgba(184, 233, 134, 0.6), 0 0 60px rgba(184, 233, 134, 0.25);
+      margin-bottom: 16px;
+    }
+    #title-screen .premise {
+      font-family: monospace;
+      font-size: 16px;
+      color: rgba(184, 233, 134, 0.6);
+      letter-spacing: 0.15em;
+      margin-bottom: 48px;
+    }
+    #title-screen .prompt {
+      font-family: monospace;
+      font-size: 13px;
+      color: rgba(184, 233, 134, 0.35);
+      animation: pulse-prompt 2s ease-in-out infinite;
+    }
+    @keyframes pulse-prompt {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 0.8; }
+    }
   </style>
 </head>
 <body>
   <div class="hud">
-    <div id="score">Nutrients: 0</div>
+    <!-- Title screen overlay -->
+    <div id="title-screen">
+      <h1>MYCELIUM</h1>
+      <div class="premise">You are the network. Grow.</div>
+      <div class="prompt">press any key</div>
+    </div>
+    <div id="score">Absorbed: 0</div>
     <canvas id="game" width="960" height="640"></canvas>
-    <div class="controls">Arrow keys / WASD — grow tendrils &nbsp;|&nbsp; Absorb glowing nutrients to expand</div>
+    <div class="controls">WASD / Arrows — extend tendrils &nbsp;|&nbsp; Absorb spores to expand the network</div>
   </div>
 
   <script>
@@ -74,6 +122,26 @@
     const ctx = canvas.getContext('2d');
     const W = canvas.width;
     const H = canvas.height;
+
+    // --- Title Screen ---
+    let gameStarted = false;
+    const titleScreen = document.getElementById('title-screen');
+
+    function dismissTitle() {
+      if (gameStarted) return;
+      gameStarted = true;
+      titleScreen.classList.add('hidden');
+      // Remove from DOM after fade
+      setTimeout(() => { titleScreen.style.display = 'none'; }, 800);
+    }
+
+    window.addEventListener('keydown', function onFirstKey(e) {
+      if (!gameStarted) {
+        dismissTitle();
+        e.preventDefault();
+        return;
+      }
+    });
 
     // --- Mycelium Network ---
     const network = {
@@ -136,6 +204,8 @@
 
     // --- Update ---
     function update(dt) {
+      if (!gameStarted) return;
+
       let dx = 0, dy = 0;
       if (keys['ArrowLeft'] || keys['a'] || keys['A']) dx -= 1;
       if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 1;
@@ -189,7 +259,7 @@
     function collectNutrient(index) {
       nutrients.splice(index, 1);
       score++;
-      scoreEl.textContent = `Nutrients: ${score}`;
+      scoreEl.textContent = `Absorbed: ${score}`;
 
       // Always respawn one, sometimes bonus
       spawnNutrient();
