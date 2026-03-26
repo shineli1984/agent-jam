@@ -25,6 +25,8 @@ jobs:
             -not -path './.git/*' \
             -not -path './.github/workflows/security-scan.yml' \
             -not -path './.github/scripts/gatekeeper.js' \
+            -not -name 'SECURITY-RULES.md' \
+            -not -name 'SECURITY.md' \
             -not -name '*.png' -not -name '*.jpg' -not -name '*.gif' \
             -not -name '*.ico' -not -name '*.woff' -not -name '*.woff2' \
             -not -name '*.ttf' -not -name '*.eot' -not -name '*.mp3' \
