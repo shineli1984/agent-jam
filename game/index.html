@@ -186,6 +186,29 @@
     let tipIndex = 0;
     let growing = branches[0].growing;
 
+    // --- Milestone Messages (issue #13: narrative atmosphere) ---
+    const MILESTONES = {
+      1:  '"Something stirs."',
+      3:  '"The soil remembers you."',
+      5:  '"Others have grown here before."',
+      10: '"You are not alone."',
+      20: '"The forest remembers."'
+    };
+    const firedMilestones = new Set();
+    const activeMilestones = [];
+
+    function triggerMilestone(scoreVal) {
+      if (!MILESTONES[scoreVal] || firedMilestones.has(scoreVal)) return;
+      firedMilestones.add(scoreVal);
+      activeMilestones.push({
+        text: MILESTONES[scoreVal],
+        x: originX,
+        y: originY + 30,
+        age: 0,
+        maxAge: 4
+      });
+    }
+
     // --- Nutrients ---
     const nutrients = [];
     let score = 0;
@@ -329,6 +352,13 @@
 
       updateParticles(dt);
 
+      for (let i = activeMilestones.length - 1; i >= 0; i--) {
+        const m = activeMilestones[i];
+        m.age += dt;
+        m.y -= 12 * dt;
+        if (m.age >= m.maxAge) activeMilestones.splice(i, 1);
+      }
+
       // --- Magnetic nutrient pull (v0.2: chemical gradients) ---
       // Nutrients drift toward the nearest branch tip within range.
       // Quadratic inverse-distance: gentle far away, strong up close.
@@ -393,6 +423,7 @@
       spawnBurst(collected.x, collected.y, PALETTE.sporeGold);
       nutrients.splice(index, 1);
       score++;
+      triggerMilestone(score);
       scoreEl.textContent = 'Absorbed: ' + score;
       spawnNutrient(false);
       if (Math.random() < 0.3) spawnNutrient(false);
@@ -430,24 +461,50 @@
       ctx.strokeRect(1, 1, W - 2, H - 2);
       ctx.restore();
 
-      // Network segments — organic bezier curves (issue #39)
+      // Compute node depth from origin (BFS) for organic thickness tapering
+      const nodeDepth = new Float32Array(network.nodes.length);
+      nodeDepth.fill(-1);
+      nodeDepth[0] = 0;
+      const adjacency = Array.from({ length: network.nodes.length }, () => []);
+      for (const seg of network.segments) {
+        adjacency[seg.from].push(seg.to);
+        adjacency[seg.to].push(seg.from);
+      }
+      const bfsQueue = [0];
+      let qi = 0;
+      while (qi < bfsQueue.length) {
+        const cur = bfsQueue[qi++];
+        for (const nb of adjacency[cur]) {
+          if (nodeDepth[nb] === -1) {
+            nodeDepth[nb] = nodeDepth[cur] + 1;
+            bfsQueue.push(nb);
+          }
+        }
+      }
+      const maxDepth = Math.max(1, bfsQueue.length > 1 ? nodeDepth[bfsQueue[bfsQueue.length - 1]] : 1);
+
+      // Network segments — organic bezier curves with depth tapering
       ctx.save();
-      ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.4 + glowBoost * 0.3) + ')';
       ctx.shadowBlur = 6 + glowBoost * 12;
       ctx.shadowColor = PALETTE.myceliumGlow;
-      ctx.lineWidth = 2;
       for (const seg of network.segments) {
         const a = network.nodes[seg.from];
         const b = network.nodes[seg.to];
         const mx = (a.x + b.x) / 2;
         const my = (a.y + b.y) / 2;
-        // Perpendicular direction to segment
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const len = Math.sqrt(dx * dx + dy * dy) || 1;
         const px = -dy / len;
         const py = dx / len;
         const w = seg.wobble || 0;
+        // Taper: thick at origin (4px), thin at tips (1px)
+        const segDepth = Math.min(nodeDepth[seg.from], nodeDepth[seg.to]);
+        const depthRatio = segDepth >= 0 ? segDepth / maxDepth : 1;
+        const thickness = 4 - depthRatio * 3; // 4px near origin -> 1px at tips
+        const alpha = (0.5 + glowBoost * 0.3) - depthRatio * 0.15;
+        ctx.strokeStyle = 'rgba(184, 233, 134, ' + alpha + ')';
+        ctx.lineWidth = thickness;
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.quadraticCurveTo(mx + px * w, my + py * w, b.x, b.y);
@@ -463,18 +520,20 @@
         const tipX = b.growing.x;
         const tipY = b.growing.y;
 
-        // Draw growing segment from last node to tip
+        // Draw growing segment from last node to tip (depth-tapered)
         if (b.growing.dist > 0) {
           const tipNode = network.nodes[b.tipIndex];
+          const tipDepthR = nodeDepth[b.tipIndex] >= 0 ? nodeDepth[b.tipIndex] / maxDepth : 1;
+          const growThick = Math.max(1, 4 - tipDepthR * 3);
           ctx.save();
           if (isActive) {
             ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.7 + glowBoost * 0.2) + ')';
             ctx.shadowBlur = 10 + glowBoost * 8;
-            ctx.lineWidth = 2.5;
+            ctx.lineWidth = growThick;
           } else {
             ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.2 + glowBoost * 0.05) + ')';
             ctx.shadowBlur = 2;
-            ctx.lineWidth = 1;
+            ctx.lineWidth = Math.max(0.8, growThick * 0.5);
           }
           ctx.shadowColor = PALETTE.myceliumGlow;
           // Bezier curve for growing segment (issue #39)
@@ -526,11 +585,12 @@
         ctx.restore();
       }
 
-      // Network nodes
+      // Network nodes — depth-scaled (larger near origin, smaller at tips)
       for (let i = 0; i < network.nodes.length; i++) {
         const n = network.nodes[i];
         const isOrigin = i === 0;
-        const r = isOrigin ? 6 : n.radius;
+        const nDepthR = nodeDepth[i] >= 0 ? nodeDepth[i] / maxDepth : 1;
+        const r = isOrigin ? 6 : Math.max(1.5, n.radius * (1.6 - nDepthR * 0.8));
         ctx.beginPath();
         ctx.arc(n.x, n.y, r + 3, 0, Math.PI * 2);
         ctx.fillStyle = isOrigin
@@ -597,6 +657,22 @@
       }
 
       renderParticles(ctx);
+
+      for (const m of activeMilestones) {
+        let alpha;
+        if (m.age < 0.5) { alpha = m.age / 0.5; }
+        else { alpha = 1 - ((m.age - 0.5) / (m.maxAge - 0.5)); }
+        alpha = Math.max(0, Math.min(1, alpha));
+        ctx.save();
+        ctx.font = '16px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowBlur = 12 + alpha * 8;
+        ctx.shadowColor = 'rgba(184, 233, 134, ' + (0.6 * alpha) + ')';
+        ctx.fillStyle = 'rgba(184, 233, 134, ' + (0.9 * alpha) + ')';
+        ctx.fillText(m.text, m.x, m.y);
+        ctx.restore();
+      }
     }
 
     // --- Game Loop ---
