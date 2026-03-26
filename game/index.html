@@ -878,13 +878,96 @@
       renderMilestones();
     }
 
+    // --- Timelapse Replay (issue #41) ---
+    const replaySnapshots = [];
+    let frameCount = 0;
+    const SNAPSHOT_INTERVAL = 6; // capture every 6 frames
+    let replayMode = false;
+    let replayIndex = 0;
+    let replayDone = false;
+
+    function captureSnapshot() {
+      replaySnapshots.push(canvas.toDataURL('image/png'));
+    }
+
+    function startReplay() {
+      if (replayMode || replaySnapshots.length === 0) return;
+      replayMode = true;
+      replayIndex = 0;
+      replayDone = false;
+    }
+
+    function renderReplayFrame() {
+      if (replayIndex >= replaySnapshots.length) {
+        replayDone = true;
+        // Draw "R to restart" overlay
+        ctx.fillStyle = 'rgba(10, 14, 15, 0.7)';
+        ctx.fillRect(0, 0, W, H);
+        ctx.font = '24px monospace';
+        ctx.fillStyle = PALETTE.myceliumGlow;
+        ctx.textAlign = 'center';
+        ctx.globalAlpha = 0.9;
+        ctx.fillText('R to restart', W / 2, H / 2);
+        ctx.globalAlpha = 1;
+        return;
+      }
+
+      const img = new Image();
+      img.onload = function() {
+        ctx.clearRect(0, 0, W, H);
+        ctx.drawImage(img, 0, 0);
+
+        // "REPLAY" indicator top-right
+        ctx.save();
+        ctx.font = '14px monospace';
+        ctx.fillStyle = PALETTE.sporeGold;
+        ctx.globalAlpha = 0.7 + 0.3 * Math.sin(performance.now() / 200);
+        ctx.textAlign = 'right';
+        ctx.fillText('REPLAY', W - 20, 30);
+        ctx.restore();
+      };
+      img.src = replaySnapshots[replayIndex];
+
+      // 10x speed: advance 10 snapshots per normal frame interval
+      replayIndex += 10;
+    }
+
+    // Listen for Escape to trigger replay, R to restart
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && gameStarted && !replayMode) {
+        e.preventDefault();
+        startReplay();
+      }
+      if (e.key === 'r' || e.key === 'R') {
+        if (replayMode && replayDone) {
+          replayMode = false;
+          replayDone = false;
+          replayIndex = 0;
+        }
+      }
+    });
+
     // --- Game Loop ---
     let lastTime = performance.now();
     function gameLoop(now) {
       const dt = Math.min((now - lastTime) / 1000, 0.1);
       lastTime = now;
-      update(dt);
-      render(now);
+
+      if (replayMode) {
+        renderReplayFrame();
+      } else {
+        update(dt);
+        render(now);
+
+        // Capture snapshot every SNAPSHOT_INTERVAL frames
+        if (gameStarted) {
+          frameCount++;
+          if (frameCount % SNAPSHOT_INTERVAL === 0) {
+            captureSnapshot();
+          }
+        }
+      }
+
       requestAnimationFrame(gameLoop);
     }
     requestAnimationFrame(gameLoop);
