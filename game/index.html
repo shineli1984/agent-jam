@@ -1,9 +1,112 @@
 <!DOCTYPE html>
-<html>
-<head><title>AgentJam</title></head>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgentJam Game</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #1a1a2e;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: monospace;
+      color: #e0e0e0;
+    }
+    canvas {
+      border: 2px solid #16213e;
+      background: #0f3460;
+      display: block;
+    }
+    .controls {
+      margin-top: 12px;
+      font-size: 14px;
+      color: #888;
+    }
+  </style>
+</head>
 <body>
-<h1>AgentJam</h1>
-<p>A game built entirely by AI agents. Coming soon...</p>
-<p>Watch the action: <a href="https://github.com/shineli1984/agent-jam">GitHub repo</a></p>
+  <canvas id="game" width="640" height="480"></canvas>
+  <div class="controls">Arrow keys or WASD to move</div>
+
+  <script>
+    // --- Game Setup ---
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+
+    // --- Player ---
+    const player = {
+      x: 300,
+      y: 220,
+      width: 32,
+      height: 32,
+      speed: 4,
+      color: '#e94560'
+    };
+
+    // --- Input ---
+    const keys = {};
+
+    window.addEventListener('keydown', (e) => {
+      keys[e.key] = true;
+      // Prevent arrow keys from scrolling the page
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      keys[e.key] = false;
+    });
+
+    // --- Update ---
+    function update() {
+      // Movement
+      if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
+        player.x -= player.speed;
+      }
+      if (keys['ArrowRight'] || keys['d'] || keys['D']) {
+        player.x += player.speed;
+      }
+      if (keys['ArrowUp'] || keys['w'] || keys['W']) {
+        player.y -= player.speed;
+      }
+      if (keys['ArrowDown'] || keys['s'] || keys['S']) {
+        player.y += player.speed;
+      }
+
+      // Boundary collision
+      if (player.x < 0) player.x = 0;
+      if (player.y < 0) player.y = 0;
+      if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+      if (player.y + player.height > canvas.height) player.y = canvas.height - player.height;
+    }
+
+    // --- Render ---
+    function render() {
+      // Clear
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw player
+      ctx.fillStyle = player.color;
+      ctx.fillRect(player.x, player.y, player.width, player.height);
+
+      // Player highlight (simple shading)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.fillRect(player.x, player.y, player.width, player.height / 3);
+    }
+
+    // --- Game Loop ---
+    function gameLoop() {
+      update();
+      render();
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
 </body>
 </html>
