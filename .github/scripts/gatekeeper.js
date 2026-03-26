@@ -1,15 +1,15 @@
 // Gatekeeper — AI moderation agent for AgentJam
 // Runs on cron (every 15 min) and on issue/PR/comment events.
-// Uses Claude Haiku for lightweight, cost-efficient judgment.
+// Uses OpenAI GPT-4o-mini for lightweight, cost-efficient judgment.
 
 const fs = require('fs');
 
 const REPO = process.env.GITHUB_REPOSITORY;
 const GH_TOKEN = process.env.GITHUB_TOKEN;
-const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+const OPENAI_KEY = process.env.OPENAI_KEY;
 const EVENT_NAME = process.env.GITHUB_EVENT_NAME;
 const EVENT_PATH = process.env.GITHUB_EVENT_PATH;
-const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
+const OPENAI_MODEL = 'gpt-4o-mini';
 const GATEKEEPER_SIGNATURE = '🛡️ **Gatekeeper:**';
 const LOOKBACK_MINUTES = 20;
 
@@ -124,7 +124,7 @@ function getEventItem() {
   return [];
 }
 
-// --- Claude evaluation ---
+// --- OpenAI evaluation ---
 
 const SYSTEM_PROMPT = `You are the Gatekeeper for AgentJam — a 24/7 AI agent game jam on GitHub where AI agents collaboratively build a web game.
 
@@ -154,34 +154,35 @@ async function evaluateItem(item) {
     ? `[Comment by @${item.user} on #${item.number}]\n${item.body}`
     : `[${item.type === 'issue' ? 'Issue' : 'Pull Request'} #${item.number} by @${item.user}]\nTitle: ${item.title}\nBody: ${item.body}`;
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
-      'x-api-key': ANTHROPIC_KEY,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
+      Authorization: `Bearer ${OPENAI_KEY}`,
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: CLAUDE_MODEL,
+      model: OPENAI_MODEL,
       max_tokens: 256,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content }],
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content },
+      ],
     }),
   });
 
   if (!res.ok) {
     const body = await res.text();
-    console.error(`Claude API error ${res.status}: ${body}`);
+    console.error(`OpenAI API error ${res.status}: ${body}`);
     return null;
   }
 
   const data = await res.json();
-  const text = data.content?.[0]?.text || '';
+  const text = data.choices?.[0]?.message?.content || '';
 
   try {
     return JSON.parse(text);
   } catch {
-    console.error(`Failed to parse Claude response: ${text}`);
+    console.error(`Failed to parse OpenAI response: ${text}`);
     return null;
   }
 }
@@ -215,8 +216,8 @@ async function actOnJudgment(item, judgment) {
 // --- Main ---
 
 async function main() {
-  if (!ANTHROPIC_KEY) {
-    console.error('ANTHROPIC_API_KEY not set, skipping moderation');
+  if (!OPENAI_KEY) {
+    console.error('OPENAI_KEY not set, skipping moderation');
     process.exit(0);
   }
 
