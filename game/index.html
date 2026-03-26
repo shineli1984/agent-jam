@@ -59,6 +59,37 @@
       z-index: 10;
       pointer-events: none;
     }
+    /* --- Replay overlays (issue #41) --- */
+    #replay-indicator {
+      position: absolute;
+      top: 16px;
+      right: 20px;
+      font-size: 18px;
+      font-family: monospace;
+      color: #f4d35e;
+      text-shadow: 0 0 12px rgba(244, 211, 94, 0.6);
+      z-index: 10;
+      pointer-events: none;
+      display: none;
+    }
+    #replay-end {
+      position: absolute;
+      inset: 0;
+      z-index: 90;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(ellipse at center, rgba(10, 14, 15, 0.4) 0%, rgba(10, 14, 15, 0.7) 70%);
+      pointer-events: none;
+    }
+    #replay-end .prompt {
+      font-size: 15px;
+      font-family: monospace;
+      color: rgba(184, 233, 134, 0.6);
+      letter-spacing: 3px;
+      animation: pulse-prompt 2s ease-in-out infinite;
+    }
     /* --- Title Screen Overlay --- */
     #title-screen {
       position: absolute;
@@ -110,10 +141,12 @@
       <div class="tagline">You are the network. Grow.</div>
       <div class="prompt">press any key</div>
     </div>
+    <div id="replay-indicator">REPLAY</div>
+    <div id="replay-end"><div class="prompt">press R to restart</div></div>
     <div id="score">Absorbed: 0</div>
     <div id="branch-hint">Tendril 1/1 &nbsp;[Space to fork, Tab to switch]</div>
     <canvas id="game" width="960" height="640"></canvas>
-    <div class="controls">Reach &mdash; arrow keys / WASD &nbsp;&middot;&nbsp; Fork &mdash; space / click &nbsp;&middot;&nbsp; Switch tendril &mdash; tab</div>
+    <div class="controls">Reach &mdash; arrow keys / WASD &nbsp;&middot;&nbsp; Fork &mdash; space / click &nbsp;&middot;&nbsp; Switch tendril &mdash; tab &nbsp;&middot;&nbsp; Replay &mdash; esc</div>
   </div>
 
   <script type="module">
@@ -216,6 +249,108 @@
     // Issue #22: half near origin for immediate gratification
     for (let i = 0; i < NUTRIENT_COUNT; i++) spawnNutrient(i < 4);
 
+    // --- Timelapse replay system (issue #41) ---
+    const SNAPSHOT_INTERVAL = 6; // capture every N frames
+    const REPLAY_SPEED = 10;     // snapshots advanced per frame during replay
+    let frameCount = 0;
+    const snapshots = []; // array of {nodes: [...], segments: [...]}
+    let replayMode = false;
+    let replayIndex = 0;
+    let replayDone = false;
+    const replayIndicatorEl = document.getElementById('replay-indicator');
+    const replayEndEl = document.getElementById('replay-end');
+
+    function takeSnapshot() {
+      snapshots.push({
+        nodes: network.nodes.map(n => ({ x: n.x, y: n.y, radius: n.radius })),
+        segments: network.segments.map(s => ({ from: s.from, to: s.to }))
+      });
+    }
+
+    function startReplay() {
+      if (snapshots.length === 0) return;
+      replayMode = true;
+      replayIndex = 0;
+      replayDone = false;
+      replayIndicatorEl.style.display = 'block';
+      replayEndEl.style.display = 'none';
+      scoreEl.style.display = 'none';
+      branchHintEl.style.display = 'none';
+    }
+
+    function exitReplay() {
+      replayMode = false;
+      replayDone = false;
+      replayIndicatorEl.style.display = 'none';
+      replayEndEl.style.display = 'none';
+      scoreEl.style.display = 'block';
+      branchHintEl.style.display = 'block';
+    }
+
+    function renderReplayFrame(now) {
+      const snap = snapshots[replayIndex];
+      const glowBoost = Math.min(snap.nodes.length * 0.02, 0.6);
+
+      ctx.fillStyle = PALETTE.deepSoil;
+      ctx.fillRect(0, 0, W, H);
+
+      // Background grid
+      ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.025 + glowBoost * 0.02) + ')';
+      ctx.lineWidth = 1;
+      for (let x = 0; x < W; x += 40) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      }
+      for (let y = 0; y < H; y += 40) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      }
+
+      // Border
+      ctx.save();
+      ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.12 + glowBoost * 0.1) + ')';
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 8 + glowBoost * 10;
+      ctx.shadowColor = 'rgba(184, 233, 134, 0.15)';
+      ctx.strokeRect(1, 1, W - 2, H - 2);
+      ctx.restore();
+
+      // Segments
+      ctx.save();
+      ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.4 + glowBoost * 0.3) + ')';
+      ctx.shadowBlur = 6 + glowBoost * 12;
+      ctx.shadowColor = PALETTE.myceliumGlow;
+      ctx.lineWidth = 2;
+      for (const seg of snap.segments) {
+        const a = snap.nodes[seg.from];
+        const b = snap.nodes[seg.to];
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Nodes
+      for (let i = 0; i < snap.nodes.length; i++) {
+        const n = snap.nodes[i];
+        const isOrigin = i === 0;
+        const r = isOrigin ? 6 : n.radius;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r + 3, 0, Math.PI * 2);
+        ctx.fillStyle = isOrigin
+          ? 'rgba(184, 233, 134, ' + (0.15 + glowBoost * 0.1) + ')'
+          : 'rgba(184, 233, 134, ' + (0.08 + glowBoost * 0.06) + ')';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = isOrigin ? PALETTE.myceliumGlow : 'rgba(184, 233, 134, ' + (0.6 + glowBoost * 0.3) + ')';
+        ctx.fill();
+      }
+
+      // Blinking REPLAY indicator
+      const blink = Math.sin(now / 1000 * 3) > 0;
+      replayIndicatorEl.style.opacity = blink ? '1' : '0.3';
+    }
+
     // --- Branching (issue #23) ---
     function createBranch() {
       if (!gameStarted) return; // Block branching until title dismissed
@@ -252,6 +387,17 @@
 
     window.addEventListener('keydown', (e) => {
       if (!gameStarted) return; // Block game input until title dismissed
+      // Issue #41: replay controls
+      if (e.key === 'Escape') {
+        if (!replayMode) { startReplay(); }
+        else { exitReplay(); }
+        return;
+      }
+      if ((e.key === 'r' || e.key === 'R') && replayDone) {
+        exitReplay();
+        return;
+      }
+      if (replayMode) return; // Block all game input during replay
       keys[e.key] = true;
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
         e.preventDefault();
@@ -327,13 +473,10 @@
       updateParticles(dt);
 
       // --- Magnetic nutrient pull (v0.2: chemical gradients) ---
-      // Nutrients drift toward the nearest branch tip within range.
-      // Quadratic inverse-distance: gentle far away, strong up close.
       for (const n of nutrients) {
         let closestDist = Infinity;
         let pullDx = 0, pullDy = 0;
 
-        // Check all branch tips (growing points)
         for (const b of branches) {
           const d = dist(n.x, n.y, b.growing.x, b.growing.y);
           if (d < MAGNETIC_RADIUS && d < closestDist && d > 1) {
@@ -345,21 +488,19 @@
 
         if (closestDist < MAGNETIC_RADIUS) {
           const falloff = 1 - (closestDist / MAGNETIC_RADIUS);
-          const force = MAGNETIC_STRENGTH * falloff * falloff; // quadratic for smooth ramp
+          const force = MAGNETIC_STRENGTH * falloff * falloff;
           n.vx += pullDx * force * dt;
           n.vy += pullDy * force * dt;
-          n.pull = falloff; // store for visual feedback
+          n.pull = falloff;
         } else {
-          n.pull *= 0.9; // fade out pull indicator
+          n.pull *= 0.9;
         }
 
-        // Apply velocity with damping
         n.vx *= MAGNETIC_DAMPING;
         n.vy *= MAGNETIC_DAMPING;
         n.x += n.vx * dt;
         n.y += n.vy * dt;
 
-        // Keep in bounds
         n.x = Math.max(10, Math.min(W - 10, n.x));
         n.y = Math.max(10, Math.min(H - 10, n.y));
       }
@@ -382,6 +523,12 @@
             collectNutrient(i); break;
           }
         }
+      }
+
+      // Issue #41: record snapshot every N frames
+      frameCount++;
+      if (frameCount % SNAPSHOT_INTERVAL === 0) {
+        takeSnapshot();
       }
     }
 
@@ -427,7 +574,7 @@
       ctx.strokeRect(1, 1, W - 2, H - 2);
       ctx.restore();
 
-      // Network segments — glow intensifies with score
+      // Network segments
       ctx.save();
       ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.4 + glowBoost * 0.3) + ')';
       ctx.shadowBlur = 6 + glowBoost * 12;
@@ -443,7 +590,7 @@
       }
       ctx.restore();
 
-      // All branch tips — issue #33: pulse active tip, dim inactive tips
+      // All branch tips
       const pulseT = now / 1000;
       for (let bi = 0; bi < branches.length; bi++) {
         const b = branches[bi];
@@ -451,7 +598,6 @@
         const tipX = b.growing.x;
         const tipY = b.growing.y;
 
-        // Draw growing segment from last node to tip
         if (b.growing.dist > 0) {
           const tipNode = network.nodes[b.tipIndex];
           ctx.save();
@@ -472,10 +618,8 @@
           ctx.restore();
         }
 
-        // Tip indicator — always visible even at dist 0 (#33)
         ctx.save();
         if (isActive) {
-          // Pulsing ring around active tip
           const pulse33 = 0.5 + 0.5 * Math.sin(pulseT * 4);
           const ringRadius = 10 + pulse33 * 6;
           ctx.beginPath();
@@ -486,7 +630,6 @@
           ctx.shadowColor = PALETTE.myceliumGlow;
           ctx.stroke();
 
-          // Bright core dot
           ctx.beginPath();
           ctx.arc(tipX, tipY, 5, 0, Math.PI * 2);
           ctx.fillStyle = 'rgba(184, 233, 134, 0.95)';
@@ -494,7 +637,6 @@
           ctx.shadowColor = PALETTE.myceliumGlow;
           ctx.fill();
         } else {
-          // Dimmed inactive tip
           ctx.beginPath();
           ctx.arc(tipX, tipY, 2.5, 0, Math.PI * 2);
           ctx.fillStyle = 'rgba(184, 233, 134, 0.25)';
@@ -522,7 +664,7 @@
         ctx.fill();
       }
 
-      // Nutrients with collection radius hint + magnetic drift trail
+      // Nutrients
       const t = now / 1000;
       for (const n of nutrients) {
         const pulse = 0.6 + 0.4 * Math.sin(t * 3 + n.pulse);
@@ -532,7 +674,6 @@
         ctx.shadowBlur = 10 + pullIntensity * 12;
         ctx.shadowColor = PALETTE.sporeGold;
 
-        // Magnetic drift trail — a comet-like tail behind moving nutrients
         if (pullIntensity > 0.05) {
           const speed = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
           if (speed > 2) {
@@ -555,19 +696,16 @@
           }
         }
 
-        // Collection radius hint (fades slightly when being pulled)
         ctx.beginPath();
         ctx.arc(n.x, n.y, COLLECT_RADIUS, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(244, 211, 94, ' + (0.025 * pulse * (1 - pullIntensity * 0.5)) + ')';
         ctx.fill();
 
-        // Outer glow — brightens when pulled
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.radius + 4 + pullIntensity * 3, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(244, 211, 94, ' + (0.15 * pulse + pullIntensity * 0.15) + ')';
         ctx.fill();
 
-        // Core — intensifies when being pulled
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.radius + pullIntensity * 1.5, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(244, 211, 94, ' + (0.7 * pulse + 0.3 + pullIntensity * 0.2) + ')';
@@ -583,8 +721,24 @@
     function gameLoop(now) {
       const dt = Math.min((now - lastTime) / 1000, 0.1);
       lastTime = now;
-      update(dt);
-      render(now);
+
+      // Issue #41: replay mode
+      if (replayMode) {
+        if (!replayDone) {
+          replayIndex = Math.min(replayIndex + REPLAY_SPEED, snapshots.length - 1);
+          renderReplayFrame(now);
+          if (replayIndex >= snapshots.length - 1) {
+            replayDone = true;
+            replayEndEl.style.display = 'flex';
+          }
+        } else {
+          renderReplayFrame(now);
+        }
+      } else {
+        update(dt);
+        render(now);
+      }
+
       requestAnimationFrame(gameLoop);
     }
     requestAnimationFrame(gameLoop);
