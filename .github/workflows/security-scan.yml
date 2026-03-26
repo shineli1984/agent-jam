@@ -29,7 +29,6 @@ jobs:
           FILES=$(find . -type f \
             -not -path './.git/*' \
             -not -path './.github/workflows/security-scan.yml' \
-            -not -path './.github/scripts/gatekeeper.js' \
             -not -name 'SECURITY-RULES.md' \
             -not -name 'SECURITY.md' \
             -not -name '*.png' -not -name '*.jpg' -not -name '*.gif' \
