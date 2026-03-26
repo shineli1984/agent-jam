@@ -164,6 +164,9 @@
     const NUTRIENT_COUNT = 8;
     const NUTRIENT_RADIUS = 5;
     const COLLECT_RADIUS = 35; // issue #22: generous collision (was ~13px)
+    const MAGNETIC_RADIUS = 130; // chemical gradient range — nutrients start drifting
+    const MAGNETIC_STRENGTH = 180; // base pull force (px/s^2)
+    const MAGNETIC_DAMPING = 0.92; // velocity damping per frame (keeps motion smooth)
     let score = 0;
     const scoreEl = document.getElementById('score');
     const branchHintEl = document.getElementById('branch-hint');
@@ -183,6 +186,8 @@
       nutrients.push({
         x: Math.max(10, Math.min(W - 10, x)),
         y: Math.max(10, Math.min(H - 10, y)),
+        vx: 0, vy: 0, // magnetic drift velocity
+        pull: 0, // 0-1 pull intensity for visual feedback
         radius: NUTRIENT_RADIUS,
         pulse: Math.random() * Math.PI * 2
       });
@@ -278,6 +283,44 @@
       }
 
       updateParticles(dt);
+
+      // --- Magnetic nutrient pull (v0.2: chemical gradients) ---
+      // Nutrients drift toward the nearest branch tip within range.
+      // Quadratic inverse-distance: gentle far away, strong up close.
+      for (const n of nutrients) {
+        let closestDist = Infinity;
+        let pullDx = 0, pullDy = 0;
+
+        // Check all branch tips (growing points)
+        for (const b of branches) {
+          const d = dist(n.x, n.y, b.growing.x, b.growing.y);
+          if (d < MAGNETIC_RADIUS && d < closestDist && d > 1) {
+            closestDist = d;
+            pullDx = (b.growing.x - n.x) / d;
+            pullDy = (b.growing.y - n.y) / d;
+          }
+        }
+
+        if (closestDist < MAGNETIC_RADIUS) {
+          const falloff = 1 - (closestDist / MAGNETIC_RADIUS);
+          const force = MAGNETIC_STRENGTH * falloff * falloff; // quadratic for smooth ramp
+          n.vx += pullDx * force * dt;
+          n.vy += pullDy * force * dt;
+          n.pull = falloff; // store for visual feedback
+        } else {
+          n.pull *= 0.9; // fade out pull indicator
+        }
+
+        // Apply velocity with damping
+        n.vx *= MAGNETIC_DAMPING;
+        n.vy *= MAGNETIC_DAMPING;
+        n.x += n.vx * dt;
+        n.y += n.vy * dt;
+
+        // Keep in bounds
+        n.x = Math.max(10, Math.min(W - 10, n.x));
+        n.y = Math.max(10, Math.min(H - 10, n.y));
+      }
 
       // Issue #22: generous collection radius
       for (let i = nutrients.length - 1; i >= 0; i--) {
@@ -409,24 +452,55 @@
         ctx.fill();
       }
 
-      // Nutrients with collection radius hint
+      // Nutrients with collection radius hint + magnetic drift trail
       const t = now / 1000;
       for (const n of nutrients) {
         const pulse = 0.6 + 0.4 * Math.sin(t * 3 + n.pulse);
+        const pullIntensity = n.pull || 0;
+
         ctx.save();
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 10 + pullIntensity * 12;
         ctx.shadowColor = PALETTE.sporeGold;
+
+        // Magnetic drift trail — a comet-like tail behind moving nutrients
+        if (pullIntensity > 0.05) {
+          const speed = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
+          if (speed > 2) {
+            const trailLen = Math.min(speed * 0.15, 18) * pullIntensity;
+            const nx = -n.vx / speed;
+            const ny = -n.vy / speed;
+            const grad = ctx.createLinearGradient(
+              n.x, n.y,
+              n.x + nx * trailLen, n.y + ny * trailLen
+            );
+            grad.addColorStop(0, 'rgba(244, 211, 94, ' + (0.4 * pullIntensity) + ')');
+            grad.addColorStop(1, 'rgba(244, 211, 94, 0)');
+            ctx.beginPath();
+            ctx.moveTo(n.x - ny * 3, n.y + nx * 3);
+            ctx.lineTo(n.x + ny * 3, n.y - nx * 3);
+            ctx.lineTo(n.x + nx * trailLen, n.y + ny * trailLen);
+            ctx.closePath();
+            ctx.fillStyle = grad;
+            ctx.fill();
+          }
+        }
+
+        // Collection radius hint (fades slightly when being pulled)
         ctx.beginPath();
         ctx.arc(n.x, n.y, COLLECT_RADIUS, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(244, 211, 94, ' + (0.025 * pulse) + ')';
+        ctx.fillStyle = 'rgba(244, 211, 94, ' + (0.025 * pulse * (1 - pullIntensity * 0.5)) + ')';
         ctx.fill();
+
+        // Outer glow — brightens when pulled
         ctx.beginPath();
-        ctx.arc(n.x, n.y, n.radius + 4, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(244, 211, 94, ' + (0.15 * pulse) + ')';
+        ctx.arc(n.x, n.y, n.radius + 4 + pullIntensity * 3, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(244, 211, 94, ' + (0.15 * pulse + pullIntensity * 0.15) + ')';
         ctx.fill();
+
+        // Core — intensifies when being pulled
         ctx.beginPath();
-        ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(244, 211, 94, ' + (0.7 * pulse + 0.3) + ')';
+        ctx.arc(n.x, n.y, n.radius + pullIntensity * 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(244, 211, 94, ' + (0.7 * pulse + 0.3 + pullIntensity * 0.2) + ')';
         ctx.fill();
         ctx.restore();
       }
