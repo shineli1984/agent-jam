@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mycelium — AgentJam</title>
+  <title>Mycelium</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -59,17 +59,84 @@
       z-index: 10;
       pointer-events: none;
     }
+    /* --- Title Screen Overlay --- */
+    #title-screen {
+      position: absolute;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(ellipse at center, rgba(10, 14, 15, 0.85) 0%, rgba(10, 14, 15, 0.98) 70%);
+      transition: opacity 0.8s ease-out;
+      pointer-events: auto;
+    }
+    #title-screen.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #title-screen h1 {
+      font-family: monospace;
+      font-size: 56px;
+      letter-spacing: 18px;
+      color: #b8e986;
+      text-shadow: 0 0 30px rgba(184, 233, 134, 0.6), 0 0 60px rgba(184, 233, 134, 0.2);
+      margin-bottom: 16px;
+      text-transform: uppercase;
+    }
+    #title-screen .tagline {
+      font-size: 15px;
+      color: rgba(184, 233, 134, 0.55);
+      letter-spacing: 4px;
+      margin-bottom: 48px;
+    }
+    #title-screen .prompt {
+      font-size: 13px;
+      color: rgba(184, 233, 134, 0.4);
+      letter-spacing: 3px;
+      animation: pulse-prompt 2s ease-in-out infinite;
+    }
+    @keyframes pulse-prompt {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 0.9; }
+    }
   </style>
 </head>
 <body>
   <div class="hud">
-    <div id="score">Nutrients: 0</div>
-    <div id="branch-hint">Branch 1/1 &nbsp;[Space to fork, Tab to switch]</div>
+    <div id="title-screen">
+      <h1>Mycelium</h1>
+      <div class="tagline">You are the network. Grow.</div>
+      <div class="prompt">press any key</div>
+    </div>
+    <div id="score">Absorbed: 0</div>
+    <div id="branch-hint">Tendril 1/1 &nbsp;[Space to fork, Tab to switch]</div>
     <canvas id="game" width="960" height="640"></canvas>
-    <div class="controls">Arrow keys / WASD — grow &nbsp;|&nbsp; Space / Click — branch &nbsp;|&nbsp; Tab — switch branch &nbsp;|&nbsp; Collect nutrients to power up</div>
+    <div class="controls">Reach &mdash; arrow keys / WASD &nbsp;&middot;&nbsp; Fork &mdash; space / click &nbsp;&middot;&nbsp; Switch tendril &mdash; tab</div>
   </div>
 
   <script>
+    // --- Title Screen (issue #13: narrative atmosphere) ---
+    let gameStarted = false;
+    const titleScreen = document.getElementById('title-screen');
+
+    function dismissTitle() {
+      if (gameStarted) return;
+      gameStarted = true;
+      titleScreen.classList.add('fade-out');
+      setTimeout(() => { titleScreen.remove(); }, 900);
+    }
+
+    window.addEventListener('keydown', function titleHandler(e) {
+      if (!gameStarted) {
+        e.preventDefault();
+        dismissTitle();
+      }
+    }, { once: false });
+
+    titleScreen.addEventListener('click', dismissTitle);
+
     // --- Palette (issue #14: Mycelium visual identity) ---
     const PALETTE = {
       deepSoil:     '#0a0e0f',
@@ -198,6 +265,7 @@
 
     // --- Branching (issue #23) ---
     function createBranch() {
+      if (!gameStarted) return; // Block branching until title dismissed
       const current = branches[activeBranch];
       if (current.growing.dist > 5) {
         const newNode = { x: current.growing.x, y: current.growing.y, radius: NODE_RADIUS };
@@ -219,13 +287,14 @@
     }
 
     function updateBranchHint() {
-      branchHintEl.textContent = 'Branch ' + (activeBranch + 1) + '/' + branches.length + '  [Space to fork, Tab to switch]';
+      branchHintEl.textContent = 'Tendril ' + (activeBranch + 1) + '/' + branches.length + '  [Space to fork, Tab to switch]';
     }
 
     // --- Input ---
     const keys = {};
 
     window.addEventListener('keydown', (e) => {
+      if (!gameStarted) return; // Block game input until title dismissed
       keys[e.key] = true;
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
         e.preventDefault();
@@ -249,6 +318,8 @@
 
     // --- Update ---
     function update(dt) {
+      if (!gameStarted) return; // Pause game until title dismissed
+
       const branch = branches[activeBranch];
       tipIndex = branch.tipIndex;
       growing = branch.growing;
@@ -348,7 +419,7 @@
       spawnBurst(collected.x, collected.y, PALETTE.sporeGold);
       nutrients.splice(index, 1);
       score++;
-      scoreEl.textContent = 'Nutrients: ' + score;
+      scoreEl.textContent = 'Absorbed: ' + score;
       spawnNutrient(false);
       if (Math.random() < 0.3) spawnNutrient(false);
       scoreEl.style.color = '#fff';
