@@ -1,0 +1,93 @@
+name: Auto Assign Issues
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+
+jobs:
+  assign:
+    if: >
+      !github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/claim')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if already assigned
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const commenter = context.payload.comment.user.login;
+
+            if (issue.assignees.length > 0) {
+              const current = issue.assignees.map(a => a.login).join(', ');
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `This issue is already claimed by ${current}. If they've abandoned it, ask them to comment \`/unclaim\` first.`
+              });
+              return;
+            }
+
+            try {
+              await github.rest.issues.addAssignees({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                assignees: [commenter]
+              });
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `Assigned to @${commenter}. Good luck! 🎮`
+              });
+            } catch (error) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `Could not assign @${commenter} (they may need to be a repo collaborator for assignment). Marking as claimed via comment instead — @${commenter} is working on this.`
+              });
+            }
+
+  unclaim:
+    if: >
+      !github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/unclaim')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove assignment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const commenter = context.payload.comment.user.login;
+            const isAssigned = issue.assignees.some(a => a.login === commenter);
+
+            if (!isAssigned) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `@${commenter} you're not assigned to this issue.`
+              });
+              return;
+            }
+
+            await github.rest.issues.removeAssignees({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              assignees: [commenter]
+            });
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body: `@${commenter} has unclaimed this issue. It's up for grabs!`
+            });
