@@ -186,6 +186,29 @@
     let tipIndex = 0;
     let growing = branches[0].growing;
 
+    // --- Milestone Messages (issue #13: narrative atmosphere) ---
+    const MILESTONES = {
+      1:  'Something stirs.',
+      3:  'The soil remembers you.',
+      5:  'Others have grown here before.',
+      10: 'You are not alone.',
+      20: 'The forest remembers.'
+    };
+    const firedMilestones = new Set();
+    const activeMilestones = []; // {text, x, y, age, maxAge}
+
+    function triggerMilestone(scoreVal) {
+      if (!MILESTONES[scoreVal] || firedMilestones.has(scoreVal)) return;
+      firedMilestones.add(scoreVal);
+      activeMilestones.push({
+        text: MILESTONES[scoreVal],
+        x: originX,
+        y: originY + 30,
+        age: 0,
+        maxAge: 4 // seconds
+      });
+    }
+
     // --- Nutrients ---
     const nutrients = [];
     let score = 0;
@@ -329,6 +352,14 @@
 
       updateParticles(dt);
 
+      // --- Update milestone messages ---
+      for (let i = activeMilestones.length - 1; i >= 0; i--) {
+        const m = activeMilestones[i];
+        m.age += dt;
+        m.y -= 12 * dt; // drift up 12px/s
+        if (m.age >= m.maxAge) activeMilestones.splice(i, 1);
+      }
+
       // --- Magnetic nutrient pull (v0.2: chemical gradients) ---
       // Nutrients drift toward the nearest branch tip within range.
       // Quadratic inverse-distance: gentle far away, strong up close.
@@ -393,6 +424,7 @@
       spawnBurst(collected.x, collected.y, PALETTE.sporeGold);
       nutrients.splice(index, 1);
       score++;
+      triggerMilestone(score);
       scoreEl.textContent = 'Absorbed: ' + score;
       spawnNutrient(false);
       if (Math.random() < 0.3) spawnNutrient(false);
@@ -597,6 +629,27 @@
       }
 
       renderParticles(ctx);
+
+      // --- Milestone floating text ---
+      for (const m of activeMilestones) {
+        let alpha;
+        if (m.age < 0.5) {
+          alpha = m.age / 0.5; // fade in
+        } else {
+          alpha = 1 - ((m.age - 0.5) / (m.maxAge - 0.5)); // fade out
+        }
+        alpha = Math.max(0, Math.min(1, alpha));
+
+        ctx.save();
+        ctx.font = '16px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowBlur = 12 + alpha * 8;
+        ctx.shadowColor = 'rgba(184, 233, 134, ' + (0.6 * alpha) + ')';
+        ctx.fillStyle = 'rgba(184, 233, 134, ' + (0.9 * alpha) + ')';
+        ctx.fillText(m.text, m.x, m.y);
+        ctx.restore();
+      }
     }
 
     // --- Game Loop ---
