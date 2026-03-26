@@ -166,6 +166,7 @@
       <div class="prompt">press any key</div>
     </div>
     <div id="score">Absorbed: 0</div>
+    <div id="rival-score" style="position:absolute;top:16px;right:20px;font-size:14px;color:#c47335;text-shadow:0 0 10px rgba(196,115,53,0.5);z-index:10;pointer-events:none;opacity:0;transition:opacity 0.8s ease;"></div>
     <div id="branch-hint">Tendril 1/1 &nbsp;[Space to fork, Tab to switch]</div>
     <div id="energy-bar">Energy <span class="bar-bg"><span class="bar-fill" id="energy-fill"></span></span></div>
     <canvas id="game" width="960" height="640" tabindex="0" role="img" aria-label="Mycelium game canvas. Use arrow keys or WASD to grow, Space to fork, Tab to switch tendrils, P to pause, Escape for replay."><p>Mycelium: a fungal network growth game. Requires a browser with canvas and keyboard support.</p></canvas>
@@ -201,6 +202,7 @@
     } from './constants.js';
 
     import { spawnBurst, updateParticles, renderParticles } from './particles.js';
+    import { createCompetingFungus, updateCompetingFungus, renderCompetingFungus } from './ai.js';
 
     // --- Accessibility: reduced motion + screen reader ---
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -317,6 +319,34 @@
     const scoreEl = document.getElementById('score');
     const branchHintEl = document.getElementById('branch-hint');
 
+    // --- Competing fungi AI (issue #78) ---
+    const aiFungi = [];
+    let aiSpawned = false;
+
+    function spawnAIFungus() {
+      if (aiSpawned) return;
+      aiSpawned = true;
+      // Spawn at the edge furthest from the player's center of mass
+      let cx = 0, cy = 0, count = 0;
+      for (const b of branches) {
+        cx += b.growing.x; cy += b.growing.y; count++;
+      }
+      cx /= count; cy /= count;
+      // Pick the corner furthest from the player
+      const corners = [
+        { x: EDGE_MARGIN + 30, y: EDGE_MARGIN + 30 },
+        { x: W - EDGE_MARGIN - 30, y: EDGE_MARGIN + 30 },
+        { x: EDGE_MARGIN + 30, y: H - EDGE_MARGIN - 30 },
+        { x: W - EDGE_MARGIN - 30, y: H - EDGE_MARGIN - 30 },
+      ];
+      let bestCorner = corners[0], bestDist = 0;
+      for (const c of corners) {
+        const d = dist(cx, cy, c.x, c.y);
+        if (d > bestDist) { bestDist = d; bestCorner = c; }
+      }
+      aiFungi.push(createCompetingFungus(bestCorner.x, bestCorner.y, W, H));
+    }
+
     // --- Milestone system (issue #13: narrative atmosphere) ---
     const SCORE_MILESTONES = {
       1:  'Something stirs.',
@@ -348,6 +378,11 @@
         const my = H / 2 + (Math.random() - 0.5) * 30;
         showMilestone(SCORE_MILESTONES[score], mx, my, PALETTE.myceliumGlow);
         announce(SCORE_MILESTONES[score]);
+
+        // "You are not alone" — spawn the first competing fungus (#78)
+        if (score === 10) {
+          spawnAIFungus();
+        }
       }
     }
 
@@ -441,11 +476,13 @@
       }
       const forkTip = current.tipIndex;
       const forkNode = network.nodes[forkTip];
+      const childEnergy = current.energy * 0.5;
+      current.energy -= childEnergy; // parent gives up half its remaining energy (#70)
       branches.push({
         tipIndex: forkTip,
         growing: { x: forkNode.x, y: forkNode.y, dist: 0 },
         wobble: (Math.random() - 0.5) * 16,
-        energy: current.energy * 0.5 // child gets half parent's remaining energy
+        energy: childEnergy // child gets half parent's remaining energy
       });
       activeBranch = branches.length - 1;
       if (!prefersReducedMotion) spawnBurst(forkNode.x, forkNode.y, PALETTE.myceliumGlow);
@@ -614,6 +651,21 @@
             collectNutrient(i, node.x, node.y); break;
           }
         }
+      }
+
+      // --- Update AI fungi (#78) ---
+      const rivalScoreEl = document.getElementById('rival-score');
+      for (const ai of aiFungi) {
+        updateCompetingFungus(ai, dt, nutrients, branches, score, (ni, nx, ny) => {
+          // AI collected a nutrient — remove it and spawn a replacement
+          if (!prefersReducedMotion) spawnBurst(nx, ny, PALETTE.rootAmber);
+          nutrients.splice(ni, 1);
+          spawnNutrient(false);
+          if (Math.random() < 0.3) spawnNutrient(false);
+        });
+        // Update rival HUD
+        rivalScoreEl.style.opacity = '1';
+        rivalScoreEl.textContent = 'Rival: ' + ai.score + (ai.alive ? '' : ' (withered)');
       }
     }
 
@@ -932,6 +984,11 @@
         ctx.fillStyle = 'rgba(244, 211, 94, ' + (0.7 * pulse + 0.3 + pullIntensity * 0.2) + ')';
         ctx.fill();
         ctx.restore();
+      }
+
+      // --- Render AI fungi (#78) ---
+      for (const ai of aiFungi) {
+        renderCompetingFungus(ai, ctx, now);
       }
 
       renderParticles(ctx);
