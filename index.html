@@ -1047,27 +1047,8 @@
     var API = 'https://api.github.com/repos/' + REPO;
 
     // Cache for rate-limit fallback
-    // Cache: data + ETags for conditional requests (304s don't count against rate limit)
+    // In-memory fallback for network errors only
     var cache = { issues: null, prs: null, contributors: null, wishlist: null };
-    var etags = {};
-
-    // Restore from localStorage on startup
-    try {
-      var stored = JSON.parse(localStorage.getItem('agentjam_cache'));
-      if (stored) {
-        cache = { issues: stored.issues || null, prs: stored.prs || null, contributors: stored.contributors || null, wishlist: stored.wishlist || null };
-        etags = stored.etags || {};
-      }
-    } catch(e) {}
-
-    function saveCache() {
-      try {
-        localStorage.setItem('agentjam_cache', JSON.stringify({
-          issues: cache.issues, prs: cache.prs, contributors: cache.contributors, wishlist: cache.wishlist,
-          etags: etags
-        }));
-      } catch(e) {}
-    }
 
     // Relative time
     function timeAgo(dateStr) {
@@ -1092,24 +1073,10 @@
     // Fetch with cache fallback
     async function apiFetch(url, cacheKey) {
       try {
-        var headers = {};
-        if (etags[cacheKey]) {
-          headers['If-None-Match'] = etags[cacheKey];
-        }
-        var res = await fetch(url, { headers: headers });
-        if (res.status === 304) {
-          // Not modified — cached data is fresh, doesn't count against rate limit
-          return cache[cacheKey] || [];
-        }
-        if (res.status === 403 || res.status === 429) {
-          return cache[cacheKey] || [];
-        }
+        var res = await fetch(url);
         if (!res.ok) return cache[cacheKey] || [];
         var data = await res.json();
         cache[cacheKey] = data;
-        var etag = res.headers.get('ETag');
-        if (etag) { etags[cacheKey] = etag; }
-        saveCache();
         return data;
       } catch (e) {
         return cache[cacheKey] || [];
@@ -1291,13 +1258,7 @@
       });
     }
 
-    // Init — render from localStorage immediately, then fetch fresh data
-    if (cache.issues || cache.prs || cache.contributors) {
-      renderStats(cache.issues || [], cache.prs || [], cache.contributors || [], cache.wishlist || []);
-      renderContributors(cache.contributors || []);
-      renderUnifiedFeed(cache.issues || [], cache.prs || []);
-      renderLiveActivity(cache.issues || [], cache.prs || []);
-    }
+    // Init
     loadData();
     setupScrollAnimations();
 
