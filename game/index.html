@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mycelium — AgentJam</title>
+  <title>Mycelium</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -30,21 +30,81 @@
     #score {
       font-size: 18px;
       color: #7fdbca;
-      margin-bottom: 8px;
+      margin-bottom: 4px;
       text-shadow: 0 0 8px rgba(127, 219, 202, 0.5);
+    }
+    #connections {
+      font-size: 13px;
+      color: rgba(127, 219, 202, 0.45);
+      margin-bottom: 8px;
+      text-shadow: 0 0 6px rgba(127, 219, 202, 0.3);
     }
     .controls {
       margin-top: 12px;
       font-size: 13px;
       color: #555;
     }
+    /* Narrative premise overlay */
+    #premise {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #0a0a12;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      transition: opacity 2s ease-out;
+    }
+    #premise .title {
+      font-size: 48px;
+      color: #7fdbca;
+      text-shadow: 0 0 30px rgba(127, 219, 202, 0.4);
+      letter-spacing: 14px;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      font-family: monospace;
+    }
+    #premise .tagline {
+      font-size: 16px;
+      color: rgba(127, 219, 202, 0.6);
+      text-shadow: 0 0 12px rgba(127, 219, 202, 0.3);
+      letter-spacing: 4px;
+      font-family: monospace;
+    }
+    #premise .prompt {
+      margin-top: 52px;
+      font-size: 12px;
+      color: rgba(127, 219, 202, 0.2);
+      letter-spacing: 3px;
+      font-family: monospace;
+      animation: pulse-prompt 2.5s ease-in-out infinite;
+    }
+    @keyframes pulse-prompt {
+      0%, 100% { opacity: 0.2; }
+      50% { opacity: 0.6; }
+    }
+    #premise.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
+  <div id="premise">
+    <div class="title">Mycelium</div>
+    <div class="tagline">You are the network. Grow.</div>
+    <div class="prompt">press any key to wake</div>
+  </div>
+
   <div class="hud">
-    <div id="score">Nutrients: 0</div>
+    <div id="score">Nutrients absorbed: 0</div>
+    <div id="connections">Connections: 0</div>
     <canvas id="game" width="640" height="480"></canvas>
-    <div class="controls">Arrow keys / WASD — grow tendrils &nbsp;|&nbsp; Absorb glowing nutrients to expand</div>
+    <div class="controls">Arrow keys / WASD — extend tendrils &nbsp;|&nbsp; Reach the glowing spores to feed</div>
   </div>
 
   <script>
@@ -80,6 +140,17 @@
     const NUTRIENT_RADIUS = 5;
     let score = 0;
     const scoreEl = document.getElementById('score');
+    const connectionsEl = document.getElementById('connections');
+
+    // --- Narrative: premise overlay ---
+    const premiseEl = document.getElementById('premise');
+    let premiseDismissed = false;
+    function dismissPremise() {
+      if (premiseDismissed) return;
+      premiseDismissed = true;
+      premiseEl.classList.add('fade-out');
+      setTimeout(() => { premiseEl.style.display = 'none'; }, 2200);
+    }
 
     function spawnNutrient() {
       const margin = 30;
@@ -98,6 +169,7 @@
 
     window.addEventListener('keydown', (e) => {
       keys[e.key] = true;
+      dismissPremise();
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
         e.preventDefault();
       }
@@ -146,6 +218,7 @@
           network.segments.push({ from: tipIndex, to: newIndex });
           tipIndex = newIndex;
           growing.dist = 0;
+          connectionsEl.textContent = `Connections: ${network.segments.length}`;
         }
       }
 
@@ -168,7 +241,7 @@
     function collectNutrient(index) {
       nutrients.splice(index, 1);
       score++;
-      scoreEl.textContent = `Nutrients: ${score}`;
+      scoreEl.textContent = `Nutrients absorbed: ${score}`;
 
       // Always respawn one, sometimes bonus
       spawnNutrient();
