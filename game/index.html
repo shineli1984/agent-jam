@@ -203,6 +203,7 @@
 
     import { spawnBurst, updateParticles, renderParticles } from './particles.js';
     import { createCompetingFungus, updateCompetingFungus, renderCompetingFungus } from './ai.js';
+    import { easeOutQuad, easeOutElastic, easeOutCubic, easeInQuad, Tween, tweens } from './easing.js';
 
     // --- Accessibility: reduced motion + screen reader ---
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -456,14 +457,135 @@
 
     for (let i = 0; i < NUTRIENT_COUNT; i++) spawnNutrient(i < 4);
 
+    // --- Fork-rejection ripple (issue #48: denied fork feedback) ---
+    const forkRipples = []; // {x, y, age, duration, color}
+
+    function spawnForkRipple(x, y, reason) {
+      if (prefersReducedMotion) return;
+      const color = reason === 'energy' ? PALETTE.decayViolet : PALETTE.rootAmber;
+      forkRipples.push({ x, y, age: 0, duration: 0.4, color, maxRadius: 24 });
+    }
+
+    function updateForkRipples(dt) {
+      for (let i = forkRipples.length - 1; i >= 0; i--) {
+        forkRipples[i].age += dt;
+        if (forkRipples[i].age >= forkRipples[i].duration) {
+          forkRipples.splice(i, 1);
+        }
+      }
+    }
+
+    function renderForkRipples() {
+      for (const r of forkRipples) {
+        const t = r.age / r.duration;
+        const easedT = easeOutCubic(t);
+        const radius = r.maxRadius * easedT;
+        const alpha = (1 - easedT) * 0.6;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = r.color;
+        ctx.globalAlpha = alpha;
+        ctx.lineWidth = 2 * (1 - easedT);
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = r.color;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // --- Nutrient absorption animation (squash-and-pop) ---
+    const absorptionAnims = []; // {x, y, age, duration, color}
+
+    function spawnAbsorptionAnim(x, y) {
+      if (prefersReducedMotion) return;
+      absorptionAnims.push({
+        x, y, age: 0, duration: 0.3,
+        // Three phases: scale up (80ms), squish (60ms), pop out (160ms)
+      });
+    }
+
+    function updateAbsorptionAnims(dt) {
+      for (let i = absorptionAnims.length - 1; i >= 0; i--) {
+        absorptionAnims[i].age += dt;
+        if (absorptionAnims[i].age >= absorptionAnims[i].duration) {
+          absorptionAnims.splice(i, 1);
+        }
+      }
+    }
+
+    function renderAbsorptionAnims() {
+      for (const a of absorptionAnims) {
+        const t = a.age / a.duration;
+
+        // Phase 1 (0-0.27): scale up with slight overshoot
+        // Phase 2 (0.27-0.47): squish horizontally, stretch vertically
+        // Phase 3 (0.47-1.0): pop outward and fade
+        let scaleX, scaleY, alpha;
+
+        if (t < 0.27) {
+          const pt = t / 0.27;
+          const eased = easeOutBack(pt);
+          scaleX = scaleY = 1 + eased * 0.5; // grows to 1.5x
+          alpha = 0.8;
+        } else if (t < 0.47) {
+          const pt = (t - 0.27) / 0.2;
+          const eased = easeOutQuad(pt);
+          scaleX = 1.5 - eased * 0.8; // squish to 0.7x wide
+          scaleY = 1.5 + eased * 0.3; // stretch to 1.8x tall
+          alpha = 0.7;
+        } else {
+          const pt = (t - 0.47) / 0.53;
+          const eased = easeInQuad(pt);
+          scaleX = scaleY = (0.7 + eased * 1.3); // expand outward
+          alpha = (1 - eased) * 0.6; // fade out
+        }
+
+        ctx.save();
+        ctx.translate(a.x, a.y);
+        ctx.scale(scaleX, scaleY);
+        ctx.beginPath();
+        ctx.arc(0, 0, NUTRIENT_RADIUS + 2, 0, Math.PI * 2);
+        ctx.fillStyle = PALETTE.sporeGold;
+        ctx.globalAlpha = alpha;
+        ctx.shadowBlur = 12 * alpha;
+        ctx.shadowColor = PALETTE.sporeGold;
+        ctx.fill();
+        ctx.restore();
+
+        // Ring burst that expands outward
+        if (t > 0.2) {
+          const ringT = (t - 0.2) / 0.8;
+          const ringEased = easeOutCubic(ringT);
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(a.x, a.y, (COLLECT_RADIUS * 0.3) + ringEased * COLLECT_RADIUS * 0.7, 0, Math.PI * 2);
+          ctx.strokeStyle = PALETTE.sporeGold;
+          ctx.globalAlpha = (1 - ringEased) * 0.4;
+          ctx.lineWidth = 1.5 * (1 - ringEased);
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = PALETTE.sporeGold;
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+    }
+
     // --- Branching (issue #23) ---
     function createBranch() {
       if (!gameStarted) return;
       const now = performance.now();
       const current = branches[activeBranch];
-      if (current.growing.dist < BRANCH_MIN_DIST || (now - lastBranchTime) < BRANCH_COOLDOWN) return;
+      // Fork rejection feedback (issue #48)
+      if (current.growing.dist < BRANCH_MIN_DIST || (now - lastBranchTime) < BRANCH_COOLDOWN) {
+        spawnForkRipple(current.growing.x, current.growing.y, 'cooldown');
+        return;
+      }
       // Energy gate: forking costs energy (issue #40)
-      if (current.energy < ENERGY_FORK_COST) return;
+      if (current.energy < ENERGY_FORK_COST) {
+        spawnForkRipple(current.growing.x, current.growing.y, 'energy');
+        return;
+      }
       lastBranchTime = now;
       current.energy -= ENERGY_FORK_COST;
       if (current.growing.dist > 5) {
@@ -596,6 +718,9 @@
       updateParticles(dt);
       updateMilestones(dt);
       updateEnergyBar();
+      tweens.update(dt);
+      updateForkRipples(dt);
+      updateAbsorptionAnims(dt);
 
       // --- Magnetic nutrient pull — energy reduces range ---
       for (const n of nutrients) {
@@ -671,7 +796,10 @@
 
     function collectNutrient(index, nx, ny) {
       const collected = nutrients[index];
-      if (!prefersReducedMotion) spawnBurst(collected.x, collected.y, PALETTE.sporeGold);
+      if (!prefersReducedMotion) {
+        spawnBurst(collected.x, collected.y, PALETTE.sporeGold);
+        spawnAbsorptionAnim(collected.x, collected.y);
+      }
       nutrients.splice(index, 1);
       score++;
       scoreEl.textContent = 'Absorbed: ' + score;
@@ -992,6 +1120,8 @@
       }
 
       renderParticles(ctx);
+      renderAbsorptionAnims();
+      renderForkRipples();
       renderMilestones();
     }
 
