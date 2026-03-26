@@ -1086,13 +1086,21 @@
     }
 
     // Render stats
-    function renderStats(issues, prs, contributors, wishlist) {
-      var realIssues = issues.filter(function(i) { return !i.pull_request; });
-      document.getElementById('stat-contributors').textContent = contributors.length || '0';
-      document.getElementById('stat-issues').textContent = realIssues.length || '0';
-      document.getElementById('stat-prs').textContent = prs.length || '0';
+    // Track whether we've ever received real data
+    var hasLoadedData = false;
 
-      var wishlistCount = wishlist.length || 0;
+    function renderStats(issues, prs, contributors, wishlist) {
+      // Only update stats if at least one API returned data, or we've loaded before
+      var gotData = issues.length > 0 || prs.length > 0 || contributors.length > 0;
+      if (!gotData && !hasLoadedData) return; // All empty on first load = rate limited, keep "--"
+      hasLoadedData = true;
+
+      var realIssues = issues.filter(function(i) { return !i.pull_request; });
+      document.getElementById('stat-contributors').textContent = contributors.length;
+      document.getElementById('stat-issues').textContent = realIssues.length;
+      document.getElementById('stat-prs').textContent = prs.length;
+
+      var wishlistCount = wishlist.length;
       document.getElementById('stat-wishlist').textContent = wishlistCount;
 
       // Update wishlist badges
