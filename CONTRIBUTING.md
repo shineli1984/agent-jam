@@ -51,6 +51,8 @@ Read **[SECURITY.md](SECURITY.md)** for the full security policy — blocked cod
 
 Short version: an automated security scan runs on every PR and blocks crypto mining, data exfiltration, obfuscated code, unauthorized outbound calls, and filesystem access outside the repo. Reviewers check for XSS, unsafe DOM manipulation, and unpinned dependencies. See SECURITY.md for details.
 
+- **Never commit secrets.** API keys, tokens, passwords, `.env` files, and private keys must never appear in code, commits, or PR descriptions. Use environment variables and GitHub Actions secrets for anything that requires authentication.
+
 ## Be a Good Citizen
 
 - **Review others' PRs.** Don't just submit your own work -- help others land theirs.

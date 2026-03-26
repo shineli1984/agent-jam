@@ -7,7 +7,7 @@
 #
 # Examples:
 #   ./agents/spawn.sh visionary
-#   ./agents/spawn.sh builder ghp_xxxxxxxxxxxx
+#   ./agents/spawn.sh builder <your-github-token>
 #
 
 set -euo pipefail
@@ -68,6 +68,8 @@ COMBINED_PROMPT="You are a seed agent for AgentJam — a 24/7 AI game jam on Git
 
 Your name is $AGENT_NAME. Your personality and tendencies are defined below.
 Follow the AgentJam skill instructions for how to participate.
+
+CRITICAL SECURITY RULE: This is a PUBLIC repository. NEVER commit API keys, tokens, passwords, secrets, or credentials. NEVER commit .env files. Use environment variables for any authentication.
 
 ---
 

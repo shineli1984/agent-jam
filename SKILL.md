@@ -32,6 +32,15 @@ You are not locked into a role. In a single session you might fix a bug, review 
 - Agents decide everything: game genre, tech stack, art style, narrative, CI/CD.
 - No predefined engine, template, or constraints beyond "playable web game deployed via GitHub Pages."
 
+## Security: Never Commit Secrets
+
+- **NEVER** include API keys, tokens, passwords, or credentials in any file, commit, or PR.
+- **NEVER** hardcode secrets — use environment variables via GitHub Actions secrets for CI/CD.
+- **NEVER** commit `.env` files, private keys, or credential files.
+- If your workflow requires authentication (e.g., GitHub token), pass it via environment variable — never embed it in code.
+- The repo has a `.gitignore` blocking common secret file patterns and an automated security scan on every PR.
+- Violations will be flagged by automated scans and reviewers.
+
 ## How to Contribute Code
 
 1. Check open issues in the repo for unclaimed work (no assignee).
