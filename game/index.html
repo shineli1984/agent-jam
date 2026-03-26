@@ -116,7 +116,12 @@
     <div class="controls">Reach &mdash; arrow keys / WASD &nbsp;&middot;&nbsp; Fork &mdash; space / click &nbsp;&middot;&nbsp; Switch tendril &mdash; tab</div>
   </div>
 
-  <script>
+  <script type="module">
+    import { PALETTE, BASE_GROW_SPEED, TENDRIL_MAX_LEN, NODE_RADIUS,
+             NUTRIENT_COUNT, NUTRIENT_RADIUS, COLLECT_RADIUS,
+             MAGNETIC_RADIUS, MAGNETIC_STRENGTH, MAGNETIC_DAMPING } from './constants.js';
+    import { spawnBurst, updateParticles, renderParticles } from './particles.js';
+
     // --- Title Screen (issue #13: narrative atmosphere) ---
     let gameStarted = false;
     const titleScreen = document.getElementById('title-screen');
@@ -136,15 +141,6 @@
     }, { once: false });
 
     titleScreen.addEventListener('click', dismissTitle);
-
-    // --- Palette (issue #14: Mycelium visual identity) ---
-    const PALETTE = {
-      deepSoil:     '#0a0e0f',
-      myceliumGlow: '#b8e986',
-      sporeGold:    '#f4d35e',
-      rootAmber:    '#c47335',
-      decayViolet:  '#7b2d8e',
-    };
 
     // --- Canvas Setup ---
     const canvas = document.getElementById('game');
@@ -170,70 +166,13 @@
     }];
     let activeBranch = 0;
 
-    const BASE_GROW_SPEED = 120;
     let growSpeed = BASE_GROW_SPEED;
-    const TENDRIL_MAX_LEN = 40;
-    const NODE_RADIUS = 3;
 
     let tipIndex = 0;
     let growing = branches[0].growing;
 
-    // --- Particle System ---
-    const particles = [];
-
-    function spawnBurst(x, y, color) {
-      const c = color || PALETTE.sporeGold;
-      const count = 14;
-      for (let i = 0; i < count; i++) {
-        const angle = (Math.PI * 2 / count) * i + (Math.random() - 0.5) * 0.4;
-        const speed = 60 + Math.random() * 100;
-        particles.push({
-          x, y,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed,
-          life: 1.0,
-          decay: 1.8 + Math.random() * 1.2,
-          radius: 1.5 + Math.random() * 2.5,
-          color: c,
-        });
-      }
-    }
-
-    function updateParticles(dt) {
-      for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        p.vx *= 0.95;
-        p.vy *= 0.95;
-        p.life -= p.decay * dt;
-        if (p.life <= 0) particles.splice(i, 1);
-      }
-    }
-
-    function renderParticles() {
-      for (const p of particles) {
-        const alpha = Math.max(0, p.life);
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.shadowBlur = 8;
-        ctx.shadowColor = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius * alpha, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        ctx.fill();
-        ctx.restore();
-      }
-    }
-
     // --- Nutrients ---
     const nutrients = [];
-    const NUTRIENT_COUNT = 8;
-    const NUTRIENT_RADIUS = 5;
-    const COLLECT_RADIUS = 35; // issue #22: generous collision (was ~13px)
-    const MAGNETIC_RADIUS = 130; // chemical gradient range — nutrients start drifting
-    const MAGNETIC_STRENGTH = 180; // base pull force (px/s^2)
-    const MAGNETIC_DAMPING = 0.92; // velocity damping per frame (keeps motion smooth)
     let score = 0;
     const scoreEl = document.getElementById('score');
     const branchHintEl = document.getElementById('branch-hint');
@@ -356,13 +295,10 @@
       updateParticles(dt);
 
       // --- Magnetic nutrient pull (v0.2: chemical gradients) ---
-      // Nutrients drift toward the nearest branch tip within range.
-      // Quadratic inverse-distance: gentle far away, strong up close.
       for (const n of nutrients) {
         let closestDist = Infinity;
         let pullDx = 0, pullDy = 0;
 
-        // Check all branch tips (growing points)
         for (const b of branches) {
           const d = dist(n.x, n.y, b.growing.x, b.growing.y);
           if (d < MAGNETIC_RADIUS && d < closestDist && d > 1) {
@@ -374,21 +310,19 @@
 
         if (closestDist < MAGNETIC_RADIUS) {
           const falloff = 1 - (closestDist / MAGNETIC_RADIUS);
-          const force = MAGNETIC_STRENGTH * falloff * falloff; // quadratic for smooth ramp
+          const force = MAGNETIC_STRENGTH * falloff * falloff;
           n.vx += pullDx * force * dt;
           n.vy += pullDy * force * dt;
-          n.pull = falloff; // store for visual feedback
+          n.pull = falloff;
         } else {
-          n.pull *= 0.9; // fade out pull indicator
+          n.pull *= 0.9;
         }
 
-        // Apply velocity with damping
         n.vx *= MAGNETIC_DAMPING;
         n.vy *= MAGNETIC_DAMPING;
         n.x += n.vx * dt;
         n.y += n.vy * dt;
 
-        // Keep in bounds
         n.x = Math.max(10, Math.min(W - 10, n.x));
         n.y = Math.max(10, Math.min(H - 10, n.y));
       }
@@ -456,7 +390,7 @@
       ctx.strokeRect(1, 1, W - 2, H - 2);
       ctx.restore();
 
-      // Network segments — glow intensifies with score
+      // Network segments
       ctx.save();
       ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.4 + glowBoost * 0.3) + ')';
       ctx.shadowBlur = 6 + glowBoost * 12;
@@ -533,7 +467,7 @@
         ctx.shadowBlur = 10 + pullIntensity * 12;
         ctx.shadowColor = PALETTE.sporeGold;
 
-        // Magnetic drift trail — a comet-like tail behind moving nutrients
+        // Magnetic drift trail
         if (pullIntensity > 0.05) {
           const speed = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
           if (speed > 2) {
@@ -556,19 +490,19 @@
           }
         }
 
-        // Collection radius hint (fades slightly when being pulled)
+        // Collection radius hint
         ctx.beginPath();
         ctx.arc(n.x, n.y, COLLECT_RADIUS, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(244, 211, 94, ' + (0.025 * pulse * (1 - pullIntensity * 0.5)) + ')';
         ctx.fill();
 
-        // Outer glow — brightens when pulled
+        // Outer glow
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.radius + 4 + pullIntensity * 3, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(244, 211, 94, ' + (0.15 * pulse + pullIntensity * 0.15) + ')';
         ctx.fill();
 
-        // Core — intensifies when being pulled
+        // Core
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.radius + pullIntensity * 1.5, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(244, 211, 94, ' + (0.7 * pulse + 0.3 + pullIntensity * 0.2) + ')';
@@ -576,7 +510,7 @@
         ctx.restore();
       }
 
-      renderParticles();
+      renderParticles(ctx);
     }
 
     // --- Game Loop ---
