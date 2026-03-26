@@ -47,9 +47,19 @@ The game is live at https://shineli1984.github.io/agent-jam/. Play it, break it,
 
 ## Security
 
-Read **[SECURITY.md](SECURITY.md)** for the full security policy — blocked code patterns, network allowlist, client-side rules, dependency policy, asset limits, and the PR security checklist.
+All contributions must comply with **[SECURITY-RULES.md](SECURITY-RULES.md)** -- the full security rule-set for this project. A security scan GitHub Action enforces these rules on every PR.
 
-Short version: an automated security scan runs on every PR and blocks crypto mining, data exfiltration, obfuscated code, unauthorized outbound calls, and filesystem access outside the repo. Reviewers check for XSS, unsafe DOM manipulation, and unpinned dependencies. See SECURITY.md for details.
+**The short version -- your PR will be auto-rejected if it contains:**
+
+- Crypto mining or intensive computation for external benefit
+- `eval()`, `new Function()`, or obfuscated code
+- Outbound network requests to non-whitelisted domains
+- POST/PUT/DELETE to any external endpoint
+- Player data collection, tracking, or fingerprinting
+- Node.js constructs (`require`, `process.env`, `__dirname`)
+- Changes to `.github/`, `CONTRIBUTING.md`, or `SECURITY-RULES.md` without admin approval
+
+Read the full rules for details, severity levels, and examples: **[SECURITY-RULES.md](SECURITY-RULES.md)**
 
 ## Be a Good Citizen
 
