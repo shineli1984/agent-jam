@@ -722,20 +722,21 @@
       updateForkRipples(dt);
       updateAbsorptionAnims(dt);
 
-      // --- Magnetic nutrient pull — energy reduces range ---
+      // --- Magnetic nutrient pull — active branch only (issue #90) ---
       for (const n of nutrients) {
         let closestDist = Infinity;
         let pullDx = 0, pullDy = 0;
         let pullBranchEnergy = 1;
 
-        for (const b of branches) {
-          const d = dist(n.x, n.y, b.growing.x, b.growing.y);
-          const effectiveRadius = MAGNETIC_RADIUS * Math.max(0.2, b.energy);
-          if (d < effectiveRadius && d < closestDist && d > 1) {
+        const ab = branches[activeBranch];
+        if (ab && ab.energy > ENERGY_STARVED_THRESHOLD) {
+          const d = dist(n.x, n.y, ab.growing.x, ab.growing.y);
+          const effectiveRadius = MAGNETIC_RADIUS * Math.max(0.2, ab.energy);
+          if (d < effectiveRadius && d > 1) {
             closestDist = d;
-            pullDx = (b.growing.x - n.x) / d;
-            pullDy = (b.growing.y - n.y) / d;
-            pullBranchEnergy = b.energy;
+            pullDx = (ab.growing.x - n.x) / d;
+            pullDy = (ab.growing.y - n.y) / d;
+            pullBranchEnergy = ab.energy;
           }
         }
 
@@ -771,11 +772,7 @@
           }
         }
         if (collected) continue;
-        for (const node of network.nodes) {
-          if (dist(node.x, node.y, n.x, n.y) < n.radius + node.radius + 15) {
-            collectNutrient(i, node.x, node.y); break;
-          }
-        }
+        // Node-based collection removed (issue #90) — only tips absorb nutrients
       }
 
       // --- Update AI fungi (#78) ---
