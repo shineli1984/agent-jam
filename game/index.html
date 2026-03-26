@@ -376,6 +376,7 @@
       }
 
       updateParticles(dt);
+      updateFloatingTexts(dt);
 
       // --- Magnetic nutrient pull (v0.2: chemical gradients) ---
       // Nutrients drift toward the nearest branch tip within range.
@@ -436,12 +437,77 @@
       }
     }
 
+    // --- Narrative Milestones (issue #13: Act 1) ---
+    const milestones = [
+      { score: 1,  text: 'Something stirs.' },
+      { score: 3,  text: 'The soil remembers you.' },
+      { score: 5,  text: 'Roots older than memory.' },
+      { score: 7,  text: 'Others have grown here before.' },
+      { score: 10, text: 'The network breathes.' },
+      { score: 15, text: 'You are not alone.' },
+      { score: 20, text: 'Mycelia span the dark.' },
+      { score: 30, text: 'The forest remembers.' },
+    ];
+    const milestoneFired = {};
+    const floatingTexts = [];
+
+    function checkMilestone(currentScore) {
+      for (const m of milestones) {
+        if (currentScore >= m.score && !milestoneFired[m.score]) {
+          milestoneFired[m.score] = true;
+          floatingTexts.push({
+            text: m.text,
+            x: originX,
+            y: originY + 30,
+            age: 0,
+            duration: 4.0,
+          });
+        }
+      }
+    }
+
+    function updateFloatingTexts(dt) {
+      for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        const ft = floatingTexts[i];
+        ft.age += dt;
+        ft.y -= 18 * dt; // drift upward
+        if (ft.age >= ft.duration) floatingTexts.splice(i, 1);
+      }
+    }
+
+    function renderFloatingTexts() {
+      for (const ft of floatingTexts) {
+        const progress = ft.age / ft.duration;
+        // fade in over first 15%, hold, then fade out over last 40%
+        let alpha;
+        if (progress < 0.15) {
+          alpha = progress / 0.15;
+        } else if (progress < 0.6) {
+          alpha = 1.0;
+        } else {
+          alpha = 1.0 - (progress - 0.6) / 0.4;
+        }
+        alpha = Math.max(0, Math.min(1, alpha)) * 0.85;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.font = '14px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = PALETTE.myceliumGlow;
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = 'rgba(184, 233, 134, 0.6)';
+        ctx.fillText(ft.text, ft.x, ft.y);
+        ctx.restore();
+      }
+    }
+
     function collectNutrient(index) {
       const collected = nutrients[index];
       spawnBurst(collected.x, collected.y, PALETTE.sporeGold);
       nutrients.splice(index, 1);
       score++;
       scoreEl.textContent = 'Absorbed: ' + score;
+      checkMilestone(score);
       spawnNutrient(false);
       if (Math.random() < 0.3) spawnNutrient(false);
       scoreEl.style.color = '#fff';
@@ -627,6 +693,7 @@
       }
 
       renderParticles();
+      renderFloatingTexts();
     }
 
     // --- Game Loop ---
