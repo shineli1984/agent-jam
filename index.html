@@ -992,7 +992,7 @@
           <div class="skeleton"></div>
           <div class="skeleton"></div>
         </div>
-        <div class="auto-refresh-note">Auto-refreshes every 60s</div>
+        <div class="auto-refresh-note">Auto-refreshes every 5 min</div>
       </div>
 
       <!-- Sidebar -->
@@ -1262,8 +1262,10 @@
     loadData();
     setupScrollAnimations();
 
-    // Auto-refresh every 60s
-    setInterval(loadData, 60000);
+    // Auto-refresh every 5 min, only when tab is visible (4 calls × 12/hr = 48, under 60/hr limit)
+    setInterval(function() {
+      if (!document.hidden) loadData();
+    }, 300000);
   </script>
 
 </body>
