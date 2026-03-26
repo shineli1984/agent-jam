@@ -1036,36 +1036,53 @@
         ctx.restore();
       }
 
-      // Network nodes — depth-tapered size and alpha (#14)
+      // Network nodes — only render origin + fork points (#64: hide intermediate nodes)
+      // Compute connectivity: count how many segments each node participates in
+      const nodeConnections = new Map();
+      for (const seg of network.segments) {
+        nodeConnections.set(seg.from, (nodeConnections.get(seg.from) || 0) + 1);
+        nodeConnections.set(seg.to, (nodeConnections.get(seg.to) || 0) + 1);
+      }
+      // Collect active tip node indices so we can skip them (tips have their own rendering above)
+      const tipNodeIndices = new Set(branches.map(b => b.tipIndex));
+
       for (let i = 0; i < network.nodes.length; i++) {
         const n = network.nodes[i];
         const isOrigin = i === 0;
+        const isFork = (nodeConnections.get(i) || 0) >= 3; // 3+ connections = branch junction
+        const isTip = tipNodeIndices.has(i);
+
+        // Skip intermediate nodes entirely — they are just segment junctions (#64)
+        if (!isOrigin && !isFork) continue;
+        // Skip tip nodes — they already have dedicated tip rendering above
+        if (isTip && !isOrigin) continue;
+
         const depth = nodeDepths.get(i) || 0;
         const depthT = maxDepth > 0 ? depth / maxDepth : 0;
-
-        // Node size: larger near origin (scale 1.0), smaller at tips (scale 0.5)
         const depthScale = 1 - depthT * 0.5;
-        const baseR = isOrigin ? 6 : n.radius;
-        const r = baseR * depthScale;
 
-        // Alpha fade at extremities
-        const nodeAlphaScale = 1 - depthT * 0.3;
-
-        // Outer glow
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, r + 3 * depthScale, 0, Math.PI * 2);
-        ctx.fillStyle = isOrigin
-          ? 'rgba(184, 233, 134, ' + (0.15 + glowBoost * 0.1) + ')'
-          : 'rgba(184, 233, 134, ' + ((0.08 + glowBoost * 0.06) * nodeAlphaScale) + ')';
-        ctx.fill();
-
-        // Inner node
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = isOrigin
-          ? PALETTE.myceliumGlow
-          : 'rgba(184, 233, 134, ' + ((0.6 + glowBoost * 0.3) * nodeAlphaScale) + ')';
-        ctx.fill();
+        if (isOrigin) {
+          // Origin: prominent glow — the heart of the network
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, 9 * depthScale, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(184, 233, 134, ' + (0.15 + glowBoost * 0.1) + ')';
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, 6 * depthScale, 0, Math.PI * 2);
+          ctx.fillStyle = PALETTE.myceliumGlow;
+          ctx.fill();
+        } else if (isFork) {
+          // Fork points: subtle organic knot — just a soft glow, no hard dot
+          const forkAlpha = (0.12 + glowBoost * 0.08) * (1 - depthT * 0.4);
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, 4 * depthScale, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(184, 233, 134, ' + forkAlpha + ')';
+          ctx.shadowBlur = 6;
+          ctx.shadowColor = PALETTE.myceliumGlow;
+          ctx.fill();
+          ctx.restore();
+        }
       }
 
       // Nutrients with collection radius hint + magnetic drift trail
