@@ -155,7 +155,31 @@
     // --- Mycelium Network ---
     const network = {
       nodes: [],   // {x, y, radius}
-      segments: [] // {from: nodeIndex, to: nodeIndex}
+      segments: [] // {from: nodeIndex, to: nodeIndex, wobble: number}
+    };
+
+    // --- Bezier helpers (issue #39: organic tendrils) ---
+    // Each segment stores a signed wobble offset. The control point sits at the
+    // segment midpoint, displaced perpendicular to the segment direction by
+    // `wobble` pixels. This keeps curves stable across frames.
+    const WOBBLE_MIN = 4;
+    const WOBBLE_MAX = 14;
+    function randomWobble() {
+      const mag = WOBBLE_MIN + Math.random() * (WOBBLE_MAX - WOBBLE_MIN);
+      return (Math.random() < 0.5 ? -1 : 1) * mag;
+    }
+
+    // Return the quadratic bezier control point for a segment
+    function segmentControlPoint(ax, ay, bx, by, wobble) {
+      const mx = (ax + bx) * 0.5;
+      const my = (ay + by) * 0.5;
+      const dx = bx - ax;
+      const dy = by - ay;
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      // perpendicular unit vector
+      const px = -dy / len;
+      const py =  dx / len;
+      return { x: mx + px * wobble, y: my + py * wobble };
     };
 
     // Seed the origin node at center
@@ -279,7 +303,7 @@
         const newNode = { x: current.growing.x, y: current.growing.y, radius: NODE_RADIUS };
         network.nodes.push(newNode);
         const newIndex = network.nodes.length - 1;
-        network.segments.push({ from: current.tipIndex, to: newIndex });
+        network.segments.push({ from: current.tipIndex, to: newIndex, wobble: randomWobble() });
         current.tipIndex = newIndex;
         current.growing.dist = 0;
       }
@@ -368,7 +392,7 @@
           const newNode = { x: growing.x, y: growing.y, radius: NODE_RADIUS };
           network.nodes.push(newNode);
           const newIndex = network.nodes.length - 1;
-          network.segments.push({ from: tipIndex, to: newIndex });
+          network.segments.push({ from: tipIndex, to: newIndex, wobble: randomWobble() });
           tipIndex = newIndex;
           branch.tipIndex = newIndex;
           growing.dist = 0;
@@ -487,9 +511,10 @@
       for (const seg of network.segments) {
         const a = network.nodes[seg.from];
         const b = network.nodes[seg.to];
+        const cp = segmentControlPoint(a.x, a.y, b.x, b.y, seg.wobble);
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
+        ctx.quadraticCurveTo(cp.x, cp.y, b.x, b.y);
         ctx.stroke();
       }
       ctx.restore();
@@ -516,9 +541,12 @@
             ctx.lineWidth = 1;
           }
           ctx.shadowColor = PALETTE.myceliumGlow;
+          // Organic bezier for growing segment — wobble scales with growth
+          const gWobble = 6 * Math.sin(b.growing.dist / TENDRIL_MAX_LEN * Math.PI);
+          const gcp = segmentControlPoint(tipNode.x, tipNode.y, tipX, tipY, gWobble);
           ctx.beginPath();
           ctx.moveTo(tipNode.x, tipNode.y);
-          ctx.lineTo(tipX, tipY);
+          ctx.quadraticCurveTo(gcp.x, gcp.y, tipX, tipY);
           ctx.stroke();
           ctx.restore();
         }
