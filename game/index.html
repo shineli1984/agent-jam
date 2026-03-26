@@ -456,18 +456,80 @@
       ctx.strokeRect(1, 1, W - 2, H - 2);
       ctx.restore();
 
-      // Network segments — glow intensifies with score
+      // Network segments — organic bezier curves, glow intensifies with score
       ctx.save();
       ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.4 + glowBoost * 0.3) + ')';
       ctx.shadowBlur = 6 + glowBoost * 12;
       ctx.shadowColor = PALETTE.myceliumGlow;
       ctx.lineWidth = 2;
+
+      // Build adjacency: for each node, collect connected neighbors
+      const neighbors = new Array(network.nodes.length);
+      for (let ni = 0; ni < network.nodes.length; ni++) neighbors[ni] = [];
+      for (const seg of network.segments) {
+        neighbors[seg.from].push(seg.to);
+        neighbors[seg.to].push(seg.from);
+      }
+
+      const CURVE_OFFSET = 0.18; // control point deviation (fraction of segment length)
+
       for (const seg of network.segments) {
         const a = network.nodes[seg.from];
         const b = network.nodes[seg.to];
+        const segDx = b.x - a.x;
+        const segDy = b.y - a.y;
+        const segLen = Math.sqrt(segDx * segDx + segDy * segDy);
+        if (segLen < 0.1) continue;
+
+        // Perpendicular to segment (normalized)
+        const perpX = -segDy / segLen;
+        const perpY = segDx / segLen;
+
+        // Offset at node A: bend away from other connections
+        let offA = 0;
+        const neighborsA = neighbors[seg.from];
+        if (neighborsA.length > 1) {
+          let sumAngle = 0;
+          for (const ni of neighborsA) {
+            if (ni === seg.to) continue;
+            const other = network.nodes[ni];
+            const odx = other.x - a.x, ody = other.y - a.y;
+            sumAngle += (odx * perpY - ody * perpX);
+          }
+          offA = Math.sign(sumAngle) * CURVE_OFFSET * segLen;
+        }
+
+        // Offset at node B: bend away from other connections
+        let offB = 0;
+        const neighborsB = neighbors[seg.to];
+        if (neighborsB.length > 1) {
+          let sumAngle = 0;
+          for (const ni of neighborsB) {
+            if (ni === seg.from) continue;
+            const other = network.nodes[ni];
+            const odx = other.x - b.x, ody = other.y - b.y;
+            sumAngle += (odx * perpY - ody * perpX);
+          }
+          offB = Math.sign(sumAngle) * CURVE_OFFSET * segLen;
+        }
+
+        // Subtle organic wobble for straight-chain segments (no branching)
+        if (offA === 0 && offB === 0) {
+          const seed = (seg.from * 7 + seg.to * 13) % 17;
+          const wobble = ((seed / 17) - 0.5) * 0.12 * segLen;
+          offA = wobble;
+          offB = -wobble * 0.6;
+        }
+
+        // Cubic bezier: control points at 1/3 and 2/3 along segment, offset perpendicular
+        const cp1x = a.x + segDx * 0.33 + perpX * offA;
+        const cp1y = a.y + segDy * 0.33 + perpY * offA;
+        const cp2x = a.x + segDx * 0.67 + perpX * offB;
+        const cp2y = a.y + segDy * 0.67 + perpY * offB;
+
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
+        ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, b.x, b.y);
         ctx.stroke();
       }
       ctx.restore();
@@ -489,9 +551,23 @@
             ctx.lineWidth = 1.5;
           }
           ctx.shadowColor = PALETTE.myceliumGlow;
+          // Quadratic bezier for growing tip — organic curve
+          const gtDx = b.growing.x - tipNode.x;
+          const gtDy = b.growing.y - tipNode.y;
+          const gtLen = Math.sqrt(gtDx * gtDx + gtDy * gtDy);
           ctx.beginPath();
           ctx.moveTo(tipNode.x, tipNode.y);
-          ctx.lineTo(b.growing.x, b.growing.y);
+          if (gtLen > 2) {
+            const gtPerpX = -gtDy / gtLen;
+            const gtPerpY = gtDx / gtLen;
+            const gtSeed = (b.tipIndex * 11) % 13;
+            const gtWobble = ((gtSeed / 13) - 0.5) * 0.15 * gtLen;
+            const cpx = tipNode.x + gtDx * 0.5 + gtPerpX * gtWobble;
+            const cpy = tipNode.y + gtDy * 0.5 + gtPerpY * gtWobble;
+            ctx.quadraticCurveTo(cpx, cpy, b.growing.x, b.growing.y);
+          } else {
+            ctx.lineTo(b.growing.x, b.growing.y);
+          }
           ctx.stroke();
           ctx.restore();
 
