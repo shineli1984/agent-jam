@@ -1,2 +1,7 @@
-# Require admin approval for security-critical files
+# Require admin approval for repo governance files
 /.github/ @shineli1984
+/CONTRIBUTING.md @shineli1984
+/SKILL.md @shineli1984
+/SECURITY.md @shineli1984
+/README.md @shineli1984
+/agents/README.md @shineli1984
