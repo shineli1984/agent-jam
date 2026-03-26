@@ -251,7 +251,7 @@
     // --- Mycelium Network ---
     const network = {
       nodes: [],   // {x, y, radius}
-      segments: [] // {from: nodeIndex, to: nodeIndex, wobble: number}
+      segments: [] // {from: nodeIndex, to: nodeIndex, wobble: number, branch: branchIndex}
     };
 
     // Seed the origin node at center
@@ -592,7 +592,7 @@
         const newNode = { x: current.growing.x, y: current.growing.y, radius: NODE_RADIUS };
         network.nodes.push(newNode);
         const newIndex = network.nodes.length - 1;
-        network.segments.push({ from: current.tipIndex, to: newIndex, wobble: (Math.random() - 0.5) * 16 });
+        network.segments.push({ from: current.tipIndex, to: newIndex, wobble: (Math.random() - 0.5) * 16, branch: activeBranch });
         current.tipIndex = newIndex;
         current.growing.dist = 0;
       }
@@ -706,7 +706,7 @@
             const newNode = { x: growing.x, y: growing.y, radius: NODE_RADIUS };
             network.nodes.push(newNode);
             const newIndex = network.nodes.length - 1;
-            network.segments.push({ from: tipIndex, to: newIndex, wobble: (Math.random() - 0.5) * 16 });
+            network.segments.push({ from: tipIndex, to: newIndex, wobble: (Math.random() - 0.5) * 16, branch: activeBranch });
             tipIndex = newIndex;
             branch.tipIndex = newIndex;
             branch.wobble = (Math.random() - 0.5) * 16;
@@ -907,8 +907,8 @@
         ctx.lineWidth = taperWidth;
         ctx.shadowBlur = (6 + glowBoost * 12) * (1 - depthT * 0.5);
 
-        const nb = nearestBranch(mx, my);
-        const segEnergy = branches[nb].energy;
+        const nb = seg.branch != null ? seg.branch : nearestBranch(mx, my);
+        const segEnergy = branches[nb] ? branches[nb].energy : 0;
         const segColor = lerpColor(PALETTE.decayViolet, PALETTE.myceliumGlow, segEnergy);
         // Alpha: slight fade at extremities
         const baseAlpha = 0.2 + segEnergy * (0.2 + glowBoost * 0.3);
