@@ -48,6 +48,30 @@
       z-index: 10;
       pointer-events: none;
     }
+    #energy-bar {
+      position: absolute;
+      top: 62px;
+      left: 20px;
+      font-size: 12px;
+      color: rgba(184, 233, 134, 0.6);
+      z-index: 10;
+      pointer-events: none;
+    }
+    #energy-bar .bar-bg {
+      display: inline-block;
+      width: 120px;
+      height: 8px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 4px;
+      vertical-align: middle;
+      margin-left: 6px;
+      overflow: hidden;
+    }
+    #energy-bar .bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.15s ease, background 0.3s ease;
+    }
     .controls {
       position: absolute;
       bottom: 16px;
@@ -112,6 +136,7 @@
     </div>
     <div id="score">Absorbed: 0</div>
     <div id="branch-hint">Tendril 1/1 &nbsp;[Space to fork, Tab to switch]</div>
+    <div id="energy-bar">Energy <span class="bar-bg"><span class="bar-fill" id="energy-fill"></span></span></div>
     <canvas id="game" width="960" height="640"></canvas>
     <div class="controls">Reach &mdash; arrow keys / WASD &nbsp;&middot;&nbsp; Fork &mdash; space / click &nbsp;&middot;&nbsp; Switch tendril &mdash; tab</div>
   </div>
@@ -131,6 +156,13 @@
       MAGNETIC_RADIUS,
       MAGNETIC_STRENGTH,
       MAGNETIC_DAMPING,
+      ENERGY_MAX,
+      ENERGY_INITIAL,
+      ENERGY_DRAIN_IDLE,
+      ENERGY_DRAIN_GROW,
+      ENERGY_FORK_COST,
+      ENERGY_REPLENISH,
+      ENERGY_STARVED_THRESHOLD,
     } from './constants.js';
 
     import { spawnBurst, updateParticles, renderParticles } from './particles.js';
@@ -172,11 +204,12 @@
     const originY = H / 2;
     network.nodes.push({ x: originX, y: originY, radius: 6 });
 
-    // --- Branching system (issue #23) ---
+    // --- Branching system (issue #23) + energy (issue #40) ---
     const branches = [{
       tipIndex: 0,
       growing: { x: originX, y: originY, dist: 0 },
-      wobble: (Math.random() - 0.5) * 16
+      wobble: (Math.random() - 0.5) * 16,
+      energy: ENERGY_INITIAL
     }];
     let activeBranch = 0;
 
@@ -185,6 +218,46 @@
 
     let tipIndex = 0;
     let growing = branches[0].growing;
+
+    // --- Energy HUD ---
+    const energyFillEl = document.getElementById('energy-fill');
+
+    function updateEnergyBar() {
+      const branch = branches[activeBranch];
+      const pct = Math.max(0, Math.min(100, branch.energy / ENERGY_MAX * 100));
+      energyFillEl.style.width = pct + '%';
+      if (branch.energy > 0.5) {
+        energyFillEl.style.background = PALETTE.myceliumGlow;
+      } else if (branch.energy > 0.2) {
+        energyFillEl.style.background = PALETTE.sporeGold;
+      } else {
+        energyFillEl.style.background = PALETTE.decayViolet;
+      }
+    }
+
+    // --- Helpers ---
+    function dist(ax, ay, bx, by) {
+      const dx = ax - bx, dy = ay - by;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function nearestBranch(x, y) {
+      let best = 0, bestDist = Infinity;
+      for (let i = 0; i < branches.length; i++) {
+        const d = dist(x, y, branches[i].growing.x, branches[i].growing.y);
+        if (d < bestDist) { bestDist = d; best = i; }
+      }
+      return best;
+    }
+
+    function lerpColor(a, b, t) {
+      const ar = parseInt(a.slice(1,3),16), ag = parseInt(a.slice(3,5),16), ab = parseInt(a.slice(5,7),16);
+      const br = parseInt(b.slice(1,3),16), bg = parseInt(b.slice(3,5),16), bb = parseInt(b.slice(5,7),16);
+      const r = Math.round(ar + (br - ar) * t);
+      const g = Math.round(ag + (bg - ag) * t);
+      const bl = Math.round(ab + (bb - ab) * t);
+      return 'rgb(' + r + ',' + g + ',' + bl + ')';
+    }
 
     // --- Nutrients ---
     const nutrients = [];
@@ -207,24 +280,25 @@
       nutrients.push({
         x: Math.max(10, Math.min(W - 10, x)),
         y: Math.max(10, Math.min(H - 10, y)),
-        vx: 0, vy: 0, // magnetic drift velocity
-        pull: 0, // 0-1 pull intensity for visual feedback
+        vx: 0, vy: 0,
+        pull: 0,
         radius: NUTRIENT_RADIUS,
         pulse: Math.random() * Math.PI * 2
       });
     }
 
-    // Issue #22: half near origin for immediate gratification
     for (let i = 0; i < NUTRIENT_COUNT; i++) spawnNutrient(i < 4);
 
     // --- Branching (issue #23) ---
     function createBranch() {
-      if (!gameStarted) return; // Block branching until title dismissed
-      // Issue #32: prevent ghost branches from rapid Space/Click
+      if (!gameStarted) return;
       const now = performance.now();
       const current = branches[activeBranch];
       if (current.growing.dist < BRANCH_MIN_DIST || (now - lastBranchTime) < BRANCH_COOLDOWN) return;
+      // Energy gate: forking costs energy (issue #40)
+      if (current.energy < ENERGY_FORK_COST) return;
       lastBranchTime = now;
+      current.energy -= ENERGY_FORK_COST;
       if (current.growing.dist > 5) {
         const newNode = { x: current.growing.x, y: current.growing.y, radius: NODE_RADIUS };
         network.nodes.push(newNode);
@@ -238,11 +312,13 @@
       branches.push({
         tipIndex: forkTip,
         growing: { x: forkNode.x, y: forkNode.y, dist: 0 },
-        wobble: (Math.random() - 0.5) * 16
+        wobble: (Math.random() - 0.5) * 16,
+        energy: current.energy * 0.5 // child gets half parent's remaining energy
       });
       activeBranch = branches.length - 1;
       spawnBurst(forkNode.x, forkNode.y, PALETTE.myceliumGlow);
       updateBranchHint();
+      updateEnergyBar();
     }
 
     function updateBranchHint() {
@@ -253,7 +329,7 @@
     const keys = {};
 
     window.addEventListener('keydown', (e) => {
-      if (!gameStarted) return; // Block game input until title dismissed
+      if (!gameStarted) return;
       keys[e.key] = true;
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
         e.preventDefault();
@@ -263,27 +339,29 @@
         e.preventDefault();
         activeBranch = (activeBranch + 1) % branches.length;
         updateBranchHint();
+        updateEnergyBar();
       }
     });
 
     window.addEventListener('keyup', (e) => { keys[e.key] = false; });
     canvas.addEventListener('click', () => { createBranch(); });
 
-    // --- Helpers ---
-    function dist(ax, ay, bx, by) {
-      const dx = ax - bx, dy = ay - by;
-      return Math.sqrt(dx * dx + dy * dy);
-    }
-
     // --- Update ---
     function update(dt) {
-      if (!gameStarted) return; // Pause game until title dismissed
+      if (!gameStarted) return;
 
       const branch = branches[activeBranch];
       tipIndex = branch.tipIndex;
       growing = branch.growing;
 
-      // Issue #24: speed scales with score
+      // --- Energy drain for ALL branches (issue #40) ---
+      for (const b of branches) {
+        b.energy -= ENERGY_DRAIN_IDLE * dt;
+        b.energy = Math.max(0, Math.min(ENERGY_MAX, b.energy));
+      }
+
+      const isStarved = branch.energy <= ENERGY_STARVED_THRESHOLD;
+
       growSpeed = BASE_GROW_SPEED + score * 8;
 
       let dx = 0, dy = 0;
@@ -293,107 +371,118 @@
       if (keys['ArrowDown'] || keys['s'] || keys['S']) dy += 1;
 
       if (dx !== 0 || dy !== 0) {
-        const len = Math.sqrt(dx * dx + dy * dy);
-        dx /= len; dy /= len;
-        const step = growSpeed * dt;
-        growing.x += dx * step;
-        growing.y += dy * step;
+        if (isStarved) {
+          // Starved: no movement
+        } else {
+          // Active growth drains extra energy
+          branch.energy -= ENERGY_DRAIN_GROW * dt;
+          branch.energy = Math.max(0, branch.energy);
 
-        // Issue #31: bounce off canvas edges instead of getting stuck
-        if (growing.x < EDGE_MARGIN) {
-          growing.x = EDGE_MARGIN + (EDGE_MARGIN - growing.x);
-        } else if (growing.x > W - EDGE_MARGIN) {
-          growing.x = (W - EDGE_MARGIN) - (growing.x - (W - EDGE_MARGIN));
-        }
-        if (growing.y < EDGE_MARGIN) {
-          growing.y = EDGE_MARGIN + (EDGE_MARGIN - growing.y);
-        } else if (growing.y > H - EDGE_MARGIN) {
-          growing.y = (H - EDGE_MARGIN) - (growing.y - (H - EDGE_MARGIN));
-        }
-        // Safety clamp in case bounce overshoots
-        growing.x = Math.max(EDGE_MARGIN, Math.min(W - EDGE_MARGIN, growing.x));
-        growing.y = Math.max(EDGE_MARGIN, Math.min(H - EDGE_MARGIN, growing.y));
+          const len = Math.sqrt(dx * dx + dy * dy);
+          dx /= len; dy /= len;
+          const step = growSpeed * dt;
+          growing.x += dx * step;
+          growing.y += dy * step;
 
-        growing.dist += step;
-        if (growing.dist >= TENDRIL_MAX_LEN) {
-          const newNode = { x: growing.x, y: growing.y, radius: NODE_RADIUS };
-          network.nodes.push(newNode);
-          const newIndex = network.nodes.length - 1;
-          network.segments.push({ from: tipIndex, to: newIndex, wobble: (Math.random() - 0.5) * 16 });
-          tipIndex = newIndex;
-          branch.tipIndex = newIndex;
-          branch.wobble = (Math.random() - 0.5) * 16;
-          growing.dist = 0;
+          // Issue #31: bounce off canvas edges
+          if (growing.x < EDGE_MARGIN) {
+            growing.x = EDGE_MARGIN + (EDGE_MARGIN - growing.x);
+          } else if (growing.x > W - EDGE_MARGIN) {
+            growing.x = (W - EDGE_MARGIN) - (growing.x - (W - EDGE_MARGIN));
+          }
+          if (growing.y < EDGE_MARGIN) {
+            growing.y = EDGE_MARGIN + (EDGE_MARGIN - growing.y);
+          } else if (growing.y > H - EDGE_MARGIN) {
+            growing.y = (H - EDGE_MARGIN) - (growing.y - (H - EDGE_MARGIN));
+          }
+          growing.x = Math.max(EDGE_MARGIN, Math.min(W - EDGE_MARGIN, growing.x));
+          growing.y = Math.max(EDGE_MARGIN, Math.min(H - EDGE_MARGIN, growing.y));
+
+          growing.dist += step;
+          if (growing.dist >= TENDRIL_MAX_LEN) {
+            const newNode = { x: growing.x, y: growing.y, radius: NODE_RADIUS };
+            network.nodes.push(newNode);
+            const newIndex = network.nodes.length - 1;
+            network.segments.push({ from: tipIndex, to: newIndex, wobble: (Math.random() - 0.5) * 16 });
+            tipIndex = newIndex;
+            branch.tipIndex = newIndex;
+            branch.wobble = (Math.random() - 0.5) * 16;
+            growing.dist = 0;
+          }
         }
       }
 
       updateParticles(dt);
+      updateEnergyBar();
 
-      // --- Magnetic nutrient pull (v0.2: chemical gradients) ---
-      // Nutrients drift toward the nearest branch tip within range.
-      // Quadratic inverse-distance: gentle far away, strong up close.
+      // --- Magnetic nutrient pull — energy reduces range ---
       for (const n of nutrients) {
         let closestDist = Infinity;
         let pullDx = 0, pullDy = 0;
+        let pullBranchEnergy = 1;
 
-        // Check all branch tips (growing points)
         for (const b of branches) {
           const d = dist(n.x, n.y, b.growing.x, b.growing.y);
-          if (d < MAGNETIC_RADIUS && d < closestDist && d > 1) {
+          const effectiveRadius = MAGNETIC_RADIUS * Math.max(0.2, b.energy);
+          if (d < effectiveRadius && d < closestDist && d > 1) {
             closestDist = d;
             pullDx = (b.growing.x - n.x) / d;
             pullDy = (b.growing.y - n.y) / d;
+            pullBranchEnergy = b.energy;
           }
         }
 
-        if (closestDist < MAGNETIC_RADIUS) {
-          const falloff = 1 - (closestDist / MAGNETIC_RADIUS);
-          const force = MAGNETIC_STRENGTH * falloff * falloff; // quadratic for smooth ramp
+        const effectiveRadius = MAGNETIC_RADIUS * Math.max(0.2, pullBranchEnergy);
+        if (closestDist < effectiveRadius) {
+          const falloff = 1 - (closestDist / effectiveRadius);
+          const force = MAGNETIC_STRENGTH * falloff * falloff * Math.max(0.1, pullBranchEnergy);
           n.vx += pullDx * force * dt;
           n.vy += pullDy * force * dt;
-          n.pull = falloff; // store for visual feedback
+          n.pull = falloff;
         } else {
-          n.pull *= 0.9; // fade out pull indicator
+          n.pull *= 0.9;
         }
 
-        // Apply velocity with damping
         n.vx *= MAGNETIC_DAMPING;
         n.vy *= MAGNETIC_DAMPING;
         n.x += n.vx * dt;
         n.y += n.vy * dt;
-
-        // Keep in bounds
         n.x = Math.max(10, Math.min(W - 10, n.x));
         n.y = Math.max(10, Math.min(H - 10, n.y));
       }
 
-      // Issue #22: generous collection radius
+      // Collection
       for (let i = nutrients.length - 1; i >= 0; i--) {
         const n = nutrients[i];
         if (dist(growing.x, growing.y, n.x, n.y) < COLLECT_RADIUS) {
-          collectNutrient(i); continue;
+          collectNutrient(i, n.x, n.y); continue;
         }
         let collected = false;
         for (const b of branches) {
           if (dist(b.growing.x, b.growing.y, n.x, n.y) < COLLECT_RADIUS) {
-            collectNutrient(i); collected = true; break;
+            collectNutrient(i, n.x, n.y); collected = true; break;
           }
         }
         if (collected) continue;
         for (const node of network.nodes) {
           if (dist(node.x, node.y, n.x, n.y) < n.radius + node.radius + 15) {
-            collectNutrient(i); break;
+            collectNutrient(i, node.x, node.y); break;
           }
         }
       }
     }
 
-    function collectNutrient(index) {
+    function collectNutrient(index, nx, ny) {
       const collected = nutrients[index];
       spawnBurst(collected.x, collected.y, PALETTE.sporeGold);
       nutrients.splice(index, 1);
       score++;
       scoreEl.textContent = 'Absorbed: ' + score;
+
+      // Replenish energy of nearest branch (issue #40)
+      const nearest = nearestBranch(nx, ny);
+      branches[nearest].energy = Math.min(ENERGY_MAX, branches[nearest].energy + ENERGY_REPLENISH);
+
       spawnNutrient(false);
       if (Math.random() < 0.3) spawnNutrient(false);
       scoreEl.style.color = '#fff';
@@ -402,6 +491,7 @@
         scoreEl.style.color = PALETTE.myceliumGlow;
         scoreEl.style.textShadow = '0 0 10px rgba(184, 233, 134, 0.5)';
       }, 200);
+      updateEnergyBar();
     }
 
     // --- Render ---
@@ -430,9 +520,8 @@
       ctx.strokeRect(1, 1, W - 2, H - 2);
       ctx.restore();
 
-      // Network segments — organic bezier curves (issue #39)
+      // Network segments — bezier curves with energy-based color (issue #39 + #40)
       ctx.save();
-      ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.4 + glowBoost * 0.3) + ')';
       ctx.shadowBlur = 6 + glowBoost * 12;
       ctx.shadowColor = PALETTE.myceliumGlow;
       ctx.lineWidth = 2;
@@ -441,43 +530,59 @@
         const b = network.nodes[seg.to];
         const mx = (a.x + b.x) / 2;
         const my = (a.y + b.y) / 2;
-        // Perpendicular direction to segment
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const len = Math.sqrt(dx * dx + dy * dy) || 1;
-        const px = -dy / len;
-        const py = dx / len;
+        const sdx = b.x - a.x;
+        const sdy = b.y - a.y;
+        const slen = Math.sqrt(sdx * sdx + sdy * sdy) || 1;
+        const px = -sdy / slen;
+        const py = sdx / slen;
         const w = seg.wobble || 0;
+
+        const nb = nearestBranch(mx, my);
+        const segEnergy = branches[nb].energy;
+        const segColor = lerpColor(PALETTE.decayViolet, PALETTE.myceliumGlow, segEnergy);
+        const segAlpha = 0.2 + segEnergy * (0.2 + glowBoost * 0.3);
+
+        ctx.strokeStyle = segColor;
+        ctx.globalAlpha = segAlpha;
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.quadraticCurveTo(mx + px * w, my + py * w, b.x, b.y);
         ctx.stroke();
       }
+      ctx.globalAlpha = 1;
       ctx.restore();
 
-      // All branch tips — issue #33: pulse active tip, dim inactive tips
+      // Branch tips with energy visuals
       const pulseT = now / 1000;
       for (let bi = 0; bi < branches.length; bi++) {
         const b = branches[bi];
         const isActive = bi === activeBranch;
         const tipX = b.growing.x;
         const tipY = b.growing.y;
+        const e = b.energy;
+        const isStarved = e <= ENERGY_STARVED_THRESHOLD;
 
-        // Draw growing segment from last node to tip
+        // Color: green -> gold -> violet based on energy
+        const tipColor = e > 0.5
+          ? lerpColor(PALETTE.sporeGold, PALETTE.myceliumGlow, (e - 0.5) * 2)
+          : lerpColor(PALETTE.decayViolet, PALETTE.sporeGold, e * 2);
+
+        // Growing segment from last node to tip
         if (b.growing.dist > 0) {
           const tipNode = network.nodes[b.tipIndex];
           ctx.save();
           if (isActive) {
-            ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.7 + glowBoost * 0.2) + ')';
-            ctx.shadowBlur = 10 + glowBoost * 8;
-            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = tipColor;
+            ctx.globalAlpha = isStarved ? 0.3 : (0.7 + glowBoost * 0.2);
+            ctx.shadowBlur = isStarved ? 2 : (10 + glowBoost * 8);
+            ctx.lineWidth = isStarved ? 1.5 : 2.5;
           } else {
-            ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.2 + glowBoost * 0.05) + ')';
+            ctx.strokeStyle = tipColor;
+            ctx.globalAlpha = 0.2 + e * 0.1;
             ctx.shadowBlur = 2;
             ctx.lineWidth = 1;
           }
-          ctx.shadowColor = PALETTE.myceliumGlow;
-          // Bezier curve for growing segment (issue #39)
+          ctx.shadowColor = tipColor;
           const gmx = (tipNode.x + tipX) / 2;
           const gmy = (tipNode.y + tipY) / 2;
           const gdx = tipX - tipNode.x;
@@ -490,39 +595,68 @@
           ctx.moveTo(tipNode.x, tipNode.y);
           ctx.quadraticCurveTo(gmx + gpx * gw, gmy + gpy * gw, tipX, tipY);
           ctx.stroke();
+          ctx.globalAlpha = 1;
           ctx.restore();
         }
 
-        // Tip indicator — always visible even at dist 0 (#33)
+        // Tip indicator
         ctx.save();
         if (isActive) {
-          // Pulsing ring around active tip
-          const pulse33 = 0.5 + 0.5 * Math.sin(pulseT * 4);
-          const ringRadius = 10 + pulse33 * 6;
-          ctx.beginPath();
-          ctx.arc(tipX, tipY, ringRadius, 0, Math.PI * 2);
-          ctx.strokeStyle = 'rgba(184, 233, 134, ' + (0.25 + pulse33 * 0.2) + ')';
-          ctx.lineWidth = 1.5;
-          ctx.shadowBlur = 12 + pulse33 * 10;
-          ctx.shadowColor = PALETTE.myceliumGlow;
-          ctx.stroke();
+          if (isStarved) {
+            // Starved: slow violet pulse + STARVED label
+            const starvedPulse = 0.3 + 0.3 * Math.sin(pulseT * 2);
+            ctx.beginPath();
+            ctx.arc(tipX, tipY, 8 + starvedPulse * 4, 0, Math.PI * 2);
+            ctx.strokeStyle = PALETTE.decayViolet;
+            ctx.globalAlpha = starvedPulse;
+            ctx.lineWidth = 1.5;
+            ctx.shadowBlur = 6;
+            ctx.shadowColor = PALETTE.decayViolet;
+            ctx.stroke();
 
-          // Bright core dot
-          ctx.beginPath();
-          ctx.arc(tipX, tipY, 5, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(184, 233, 134, 0.95)';
-          ctx.shadowBlur = 16 + glowBoost * 10;
-          ctx.shadowColor = PALETTE.myceliumGlow;
-          ctx.fill();
+            ctx.beginPath();
+            ctx.arc(tipX, tipY, 4, 0, Math.PI * 2);
+            ctx.fillStyle = PALETTE.decayViolet;
+            ctx.globalAlpha = 0.6;
+            ctx.fill();
+
+            ctx.font = '9px monospace';
+            ctx.fillStyle = PALETTE.decayViolet;
+            ctx.globalAlpha = 0.5 + starvedPulse * 0.3;
+            ctx.textAlign = 'center';
+            ctx.fillText('STARVED', tipX, tipY - 16);
+          } else {
+            // Pulsing ring — color reflects energy
+            const pulse33 = 0.5 + 0.5 * Math.sin(pulseT * 4);
+            const ringRadius = 10 + pulse33 * 6;
+            ctx.beginPath();
+            ctx.arc(tipX, tipY, ringRadius, 0, Math.PI * 2);
+            ctx.strokeStyle = tipColor;
+            ctx.globalAlpha = 0.25 + pulse33 * 0.2;
+            ctx.lineWidth = 1.5;
+            ctx.shadowBlur = 12 + pulse33 * 10;
+            ctx.shadowColor = tipColor;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(tipX, tipY, 5, 0, Math.PI * 2);
+            ctx.fillStyle = tipColor;
+            ctx.globalAlpha = 0.95;
+            ctx.shadowBlur = 16 + glowBoost * 10;
+            ctx.shadowColor = tipColor;
+            ctx.fill();
+          }
         } else {
           // Dimmed inactive tip
           ctx.beginPath();
           ctx.arc(tipX, tipY, 2.5, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(184, 233, 134, 0.25)';
+          ctx.fillStyle = tipColor;
+          ctx.globalAlpha = isStarved ? 0.1 : 0.25;
           ctx.shadowBlur = 3;
-          ctx.shadowColor = PALETTE.myceliumGlow;
+          ctx.shadowColor = tipColor;
           ctx.fill();
         }
+        ctx.globalAlpha = 1;
         ctx.restore();
       }
 
@@ -553,17 +687,13 @@
         ctx.shadowBlur = 10 + pullIntensity * 12;
         ctx.shadowColor = PALETTE.sporeGold;
 
-        // Magnetic drift trail — a comet-like tail behind moving nutrients
         if (pullIntensity > 0.05) {
           const speed = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
           if (speed > 2) {
             const trailLen = Math.min(speed * 0.15, 18) * pullIntensity;
             const nx = -n.vx / speed;
             const ny = -n.vy / speed;
-            const grad = ctx.createLinearGradient(
-              n.x, n.y,
-              n.x + nx * trailLen, n.y + ny * trailLen
-            );
+            const grad = ctx.createLinearGradient(n.x, n.y, n.x + nx * trailLen, n.y + ny * trailLen);
             grad.addColorStop(0, 'rgba(244, 211, 94, ' + (0.4 * pullIntensity) + ')');
             grad.addColorStop(1, 'rgba(244, 211, 94, 0)');
             ctx.beginPath();
@@ -576,19 +706,16 @@
           }
         }
 
-        // Collection radius hint (fades slightly when being pulled)
         ctx.beginPath();
         ctx.arc(n.x, n.y, COLLECT_RADIUS, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(244, 211, 94, ' + (0.025 * pulse * (1 - pullIntensity * 0.5)) + ')';
         ctx.fill();
 
-        // Outer glow — brightens when pulled
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.radius + 4 + pullIntensity * 3, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(244, 211, 94, ' + (0.15 * pulse + pullIntensity * 0.15) + ')';
         ctx.fill();
 
-        // Core — intensifies when being pulled
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.radius + pullIntensity * 1.5, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(244, 211, 94, ' + (0.7 * pulse + 0.3 + pullIntensity * 0.2) + ')';

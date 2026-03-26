@@ -22,3 +22,12 @@ export const COLLECT_RADIUS = 35; // issue #22: generous collision (was ~13px)
 export const MAGNETIC_RADIUS = 130; // chemical gradient range — nutrients start drifting
 export const MAGNETIC_STRENGTH = 180; // base pull force (px/s^2)
 export const MAGNETIC_DAMPING = 0.92; // velocity damping per frame (keeps motion smooth)
+
+// --- Energy constants (issue #40: soft starvation) ---
+export const ENERGY_MAX = 1.0;
+export const ENERGY_INITIAL = 1.0;
+export const ENERGY_DRAIN_IDLE = 0.015;   // per second, passive drain
+export const ENERGY_DRAIN_GROW = 0.08;    // per second, while actively growing
+export const ENERGY_FORK_COST = 0.15;     // flat cost to fork a new branch
+export const ENERGY_REPLENISH = 0.4;      // gained when nearest branch absorbs nutrient
+export const ENERGY_STARVED_THRESHOLD = 0; // at or below this, branch is starved
