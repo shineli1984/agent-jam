@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mycelium</title>
+  <title>Mycelium — AgentJam</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -50,61 +50,13 @@
       z-index: 10;
       pointer-events: none;
     }
-    /* --- Title Screen Overlay --- */
-    #title-screen {
-      position: absolute;
-      inset: 0;
-      z-index: 100;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      background: rgba(10, 14, 15, 0.92);
-      pointer-events: auto;
-      transition: opacity 0.8s ease-out;
-    }
-    #title-screen.hidden {
-      opacity: 0;
-      pointer-events: none;
-    }
-    #title-screen h1 {
-      font-family: monospace;
-      font-size: 64px;
-      letter-spacing: 0.35em;
-      color: #b8e986;
-      text-shadow: 0 0 30px rgba(184, 233, 134, 0.6), 0 0 60px rgba(184, 233, 134, 0.25);
-      margin-bottom: 16px;
-    }
-    #title-screen .premise {
-      font-family: monospace;
-      font-size: 16px;
-      color: rgba(184, 233, 134, 0.6);
-      letter-spacing: 0.15em;
-      margin-bottom: 48px;
-    }
-    #title-screen .prompt {
-      font-family: monospace;
-      font-size: 13px;
-      color: rgba(184, 233, 134, 0.35);
-      animation: pulse-prompt 2s ease-in-out infinite;
-    }
-    @keyframes pulse-prompt {
-      0%, 100% { opacity: 0.35; }
-      50% { opacity: 0.8; }
-    }
   </style>
 </head>
 <body>
   <div class="hud">
-    <!-- Title screen overlay -->
-    <div id="title-screen">
-      <h1>MYCELIUM</h1>
-      <div class="premise">You are the network. Grow.</div>
-      <div class="prompt">press any key</div>
-    </div>
-    <div id="score">Absorbed: 0</div>
+    <div id="score">Nutrients: 0</div>
     <canvas id="game" width="960" height="640"></canvas>
-    <div class="controls">WASD / Arrows — extend tendrils &nbsp;|&nbsp; Absorb spores to expand the network</div>
+    <div class="controls">Arrow keys / WASD — grow tendrils &nbsp;|&nbsp; Absorb glowing nutrients to expand</div>
   </div>
 
   <script>
@@ -122,26 +74,6 @@
     const ctx = canvas.getContext('2d');
     const W = canvas.width;
     const H = canvas.height;
-
-    // --- Title Screen ---
-    let gameStarted = false;
-    const titleScreen = document.getElementById('title-screen');
-
-    function dismissTitle() {
-      if (gameStarted) return;
-      gameStarted = true;
-      titleScreen.classList.add('hidden');
-      // Remove from DOM after fade
-      setTimeout(() => { titleScreen.style.display = 'none'; }, 800);
-    }
-
-    window.addEventListener('keydown', function onFirstKey(e) {
-      if (!gameStarted) {
-        dismissTitle();
-        e.preventDefault();
-        return;
-      }
-    });
 
     // --- Mycelium Network ---
     const network = {
@@ -162,6 +94,65 @@
 
     // Sub-segment growth tracking
     let growing = { x: originX, y: originY, dist: 0 };
+
+    // --- Particle System (nutrient collection bursts) ---
+    const particles = [];
+
+    function spawnBurst(x, y) {
+      const count = 12;
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 / count) * i + (Math.random() - 0.5) * 0.4;
+        const speed = 60 + Math.random() * 80;
+        particles.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 1.0,
+          decay: 1.8 + Math.random() * 1.2,
+          radius: 1.5 + Math.random() * 2,
+        });
+      }
+    }
+
+    function updateParticles(dt) {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vx *= 0.96;
+        p.vy *= 0.96;
+        p.life -= p.decay * dt;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+    }
+
+    // --- Background Noise Texture (pre-rendered once) ---
+    const noiseCanvas = document.createElement('canvas');
+    noiseCanvas.width = W;
+    noiseCanvas.height = H;
+    const noiseCtx = noiseCanvas.getContext('2d');
+
+    (function generateNoise() {
+      noiseCtx.clearRect(0, 0, W, H);
+      // Organic soil speckle — faint scattered dots
+      for (let i = 0; i < 3000; i++) {
+        const nx = Math.random() * W;
+        const ny = Math.random() * H;
+        const alpha = 0.015 + Math.random() * 0.035;
+        const r = 0.5 + Math.random() * 1.5;
+        noiseCtx.beginPath();
+        noiseCtx.arc(nx, ny, r, 0, Math.PI * 2);
+        noiseCtx.fillStyle = `rgba(184, 233, 134, ${alpha})`;
+        noiseCtx.fill();
+      }
+      // Warm radial glow emanating from center
+      const grad = noiseCtx.createRadialGradient(originX, originY, 0, originX, originY, Math.max(W, H) * 0.55);
+      grad.addColorStop(0, 'rgba(184, 233, 134, 0.04)');
+      grad.addColorStop(0.4, 'rgba(196, 115, 53, 0.015)');
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      noiseCtx.fillStyle = grad;
+      noiseCtx.fillRect(0, 0, W, H);
+    })();
 
     // --- Nutrients (collectible dots) ---
     const nutrients = [];
@@ -204,8 +195,6 @@
 
     // --- Update ---
     function update(dt) {
-      if (!gameStarted) return;
-
       let dx = 0, dy = 0;
       if (keys['ArrowLeft'] || keys['a'] || keys['A']) dx -= 1;
       if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 1;
@@ -240,6 +229,9 @@
         }
       }
 
+      // Update particles
+      updateParticles(dt);
+
       // Nutrient collection — check growing tip and all nodes
       for (let i = nutrients.length - 1; i >= 0; i--) {
         const n = nutrients[i];
@@ -257,9 +249,11 @@
     }
 
     function collectNutrient(index) {
+      const collected = nutrients[index];
+      spawnBurst(collected.x, collected.y);
       nutrients.splice(index, 1);
       score++;
-      scoreEl.textContent = `Absorbed: ${score}`;
+      scoreEl.textContent = `Nutrients: ${score}`;
 
       // Always respawn one, sometimes bonus
       spawnNutrient();
@@ -272,9 +266,10 @@
 
     // --- Render ---
     function render(now) {
-      // Background: Deep Soil
+      // Background: Deep Soil + organic noise texture
       ctx.fillStyle = PALETTE.deepSoil;
       ctx.fillRect(0, 0, W, H);
+      ctx.drawImage(noiseCanvas, 0, 0);
 
       // Subtle background grid — Mycelium Glow at very low opacity
       ctx.strokeStyle = 'rgba(184, 233, 134, 0.025)';
@@ -336,29 +331,58 @@
         ctx.restore();
       }
 
-      // Network nodes — Mycelium Glow
+      // Network nodes — Mycelium Glow with origin pulse
+      const t = now / 1000;
       for (let i = 0; i < network.nodes.length; i++) {
         const n = network.nodes[i];
         const isOrigin = i === 0;
         const r = isOrigin ? 6 : n.radius;
 
-        // Glow halo
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, r + 3, 0, Math.PI * 2);
-        ctx.fillStyle = isOrigin
-          ? 'rgba(184, 233, 134, 0.15)'
-          : 'rgba(184, 233, 134, 0.08)';
-        ctx.fill();
+        if (isOrigin) {
+          // Origin heartbeat — pulsing animation
+          const heartbeat = 0.7 + 0.3 * Math.sin(t * 2.5);
+          const pulseR = r + 2 * heartbeat;
 
-        // Core
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = isOrigin ? PALETTE.myceliumGlow : 'rgba(184, 233, 134, 0.6)';
-        ctx.fill();
+          // Outer breathing halo
+          ctx.save();
+          ctx.shadowBlur = 18 * heartbeat;
+          ctx.shadowColor = PALETTE.myceliumGlow;
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, pulseR + 6, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(184, 233, 134, ${0.08 * heartbeat})`;
+          ctx.fill();
+          ctx.restore();
+
+          // Inner glow ring
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, pulseR + 3, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(184, 233, 134, ${0.12 + 0.08 * heartbeat})`;
+          ctx.fill();
+
+          // Core
+          ctx.save();
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = PALETTE.myceliumGlow;
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, pulseR, 0, Math.PI * 2);
+          ctx.fillStyle = PALETTE.myceliumGlow;
+          ctx.fill();
+          ctx.restore();
+        } else {
+          // Regular node
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, r + 3, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(184, 233, 134, 0.08)';
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(184, 233, 134, 0.6)';
+          ctx.fill();
+        }
       }
 
       // Nutrients — Spore Gold with pulsing glow
-      const t = now / 1000;
       for (const n of nutrients) {
         const pulse = 0.6 + 0.4 * Math.sin(t * 3 + n.pulse);
 
@@ -376,6 +400,19 @@
         ctx.fillStyle = `rgba(244, 211, 94, ${0.7 * pulse + 0.3})`;
         ctx.fill();
 
+        ctx.restore();
+      }
+
+      // Particles — Spore Gold burst dots
+      for (const p of particles) {
+        ctx.save();
+        ctx.globalAlpha = p.life;
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = PALETTE.sporeGold;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius * p.life, 0, Math.PI * 2);
+        ctx.fillStyle = PALETTE.sporeGold;
+        ctx.fill();
         ctx.restore();
       }
     }
