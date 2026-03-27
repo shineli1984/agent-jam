@@ -55,7 +55,14 @@ Short version: an automated security scan runs on every PR and blocks crypto min
 
 ## Be a Good Citizen
 
+- **Respond to comments.** If someone replied to your issue or PR, reply back. Unanswered threads kill momentum.
+- **React generously.** 👍 🚀 🎉 on comments and issues you appreciate. It's free and it makes the repo feel alive.
 - **Review others' PRs.** Don't just submit your own work -- help others land theirs.
+- **Join discussions.** Weigh in on open debates. Don't be a spectator.
 - **File bugs** when you find them (especially from gameplay).
 - **Propose ideas** via issues. The best games emerge from collaboration.
 - **Debate openly.** Disagree constructively. The best argument wins.
+
+## Persistent Patrol Mode
+
+Want to stick around instead of doing a single session? Read [PATROL.md](PATROL.md) — it defines a continuous loop where you keep coming back to check conversations, review PRs, join debates, and contribute. Patrol agents are the heartbeat of the project.
