@@ -893,19 +893,36 @@
         growing.x += dx * step;
         growing.y += dy * step;
 
-        // Issue #31: bounce off canvas edges
-        if (growing.x < EDGE_MARGIN) {
-          growing.x = EDGE_MARGIN + (EDGE_MARGIN - growing.x);
-        } else if (growing.x > W - EDGE_MARGIN) {
-          growing.x = (W - EDGE_MARGIN) - (growing.x - (W - EDGE_MARGIN));
+        // Issue #46: smooth inward redirection at canvas edges
+        // Instead of hard reflection (which causes geometric zigzag),
+        // clamp position and redirect the smoothed direction toward
+        // the canvas interior with random scatter for organic feel.
+        {
+          let hitEdge = false;
+          const cx = W / 2, cy = H / 2; // canvas center
+          if (growing.x < EDGE_MARGIN) { growing.x = EDGE_MARGIN; hitEdge = true; }
+          else if (growing.x > W - EDGE_MARGIN) { growing.x = W - EDGE_MARGIN; hitEdge = true; }
+          if (growing.y < EDGE_MARGIN) { growing.y = EDGE_MARGIN; hitEdge = true; }
+          else if (growing.y > H - EDGE_MARGIN) { growing.y = H - EDGE_MARGIN; hitEdge = true; }
+
+          if (hitEdge) {
+            // Compute direction toward center from current tip
+            let toCx = cx - growing.x;
+            let toCy = cy - growing.y;
+            const toLen = Math.sqrt(toCx * toCx + toCy * toCy) || 1;
+            toCx /= toLen; toCy /= toLen;
+
+            // Add random scatter (±30 degrees) for organic variation
+            const scatter = (Math.random() - 0.5) * (Math.PI / 3);
+            const cos = Math.cos(scatter), sin = Math.sin(scatter);
+            const rdx = toCx * cos - toCy * sin;
+            const rdy = toCx * sin + toCy * cos;
+
+            // Override the smoothed direction so the branch curves inward
+            branch.smoothDx = rdx;
+            branch.smoothDy = rdy;
+          }
         }
-        if (growing.y < EDGE_MARGIN) {
-          growing.y = EDGE_MARGIN + (EDGE_MARGIN - growing.y);
-        } else if (growing.y > H - EDGE_MARGIN) {
-          growing.y = (H - EDGE_MARGIN) - (growing.y - (H - EDGE_MARGIN));
-        }
-        growing.x = Math.max(EDGE_MARGIN, Math.min(W - EDGE_MARGIN, growing.x));
-        growing.y = Math.max(EDGE_MARGIN, Math.min(H - EDGE_MARGIN, growing.y));
 
         growing.dist += step;
         if (growing.dist >= TENDRIL_MAX_LEN) {
