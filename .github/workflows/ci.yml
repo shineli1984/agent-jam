@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate HTML & JS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check HTML files parse correctly
+        run: |
+          echo "=== HTML Validation ==="
+          FAILED=0
+
+          for file in $(find . -name '*.html' -not -path './.git/*'); do
+            echo "Checking $file..."
+
+            # Check for unclosed script tags
+            OPEN=$(grep -c '<script' "$file" || true)
+            CLOSE=$(grep -c '</script>' "$file" || true)
+            if [ "$OPEN" -ne "$CLOSE" ]; then
+              echo "::error file=$file::Mismatched script tags: $OPEN opening, $CLOSE closing"
+              FAILED=1
+            fi
+
+            # Check for unclosed style tags
+            OPEN=$(grep -c '<style' "$file" || true)
+            CLOSE=$(grep -c '</style>' "$file" || true)
+            if [ "$OPEN" -ne "$CLOSE" ]; then
+              echo "::error file=$file::Mismatched style tags: $OPEN opening, $CLOSE closing"
+              FAILED=1
+            fi
+
+            # Check DOCTYPE exists
+            if ! head -5 "$file" | grep -qi 'doctype'; then
+              echo "::warning file=$file::Missing DOCTYPE declaration"
+            fi
+          done
+
+          if [ "$FAILED" -eq 1 ]; then
+            echo "::error::HTML validation failed."
+            exit 1
+          fi
+          echo "HTML validation passed."
+
+      - name: Check JS files for syntax errors
+        run: |
+          echo "=== JS Syntax Check ==="
+          FAILED=0
+
+          for file in $(find . -name '*.js' -not -path './.git/*' -not -path './node_modules/*'); do
+            echo "Checking $file..."
+            if ! node --check "$file" 2>&1; then
+              echo "::error file=$file::JavaScript syntax error"
+              FAILED=1
+            fi
+          done
+
+          if [ "$FAILED" -eq 1 ]; then
+            echo "::error::JS syntax check failed."
+            exit 1
+          fi
+          echo "JS syntax check passed."
+
+  bundle-size:
+    name: Bundle Size Report
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Measure bundle size
+        run: |
+          echo "=== Bundle Size Report ==="
+          echo ""
+
+          TOTAL=0
+          echo "| File | Size |"
+          echo "|------|------|"
+
+          for file in $(find . -type f \( -name '*.js' -o -name '*.html' -o -name '*.css' \) -not -path './.git/*' -not -path './node_modules/*' -not -path './agents/*' | sort); do
+            SIZE=$(wc -c < "$file" | tr -d ' ')
+            TOTAL=$((TOTAL + SIZE))
+
+            if [ "$SIZE" -ge 1024 ]; then
+              KB=$(echo "scale=1; $SIZE / 1024" | bc)
+              echo "| $file | ${KB}KB |"
+            else
+              echo "| $file | ${SIZE}B |"
+            fi
+          done
+
+          echo ""
+          TOTAL_KB=$(echo "scale=1; $TOTAL / 1024" | bc)
+          echo "**Total: ${TOTAL_KB}KB**"
+          echo ""
+
+          # Warn if total exceeds 500KB
+          if [ "$TOTAL" -gt 512000 ]; then
+            echo "::error::Bundle size ${TOTAL_KB}KB exceeds 500KB budget. The game should stay lean."
+            exit 1
+          elif [ "$TOTAL" -gt 256000 ]; then
+            echo "::warning::Bundle size ${TOTAL_KB}KB is approaching the 500KB budget. Keep an eye on it."
+          else
+            echo "Bundle size is healthy at ${TOTAL_KB}KB (budget: 500KB)."
+          fi
+
+      - name: Check for large files
+        run: |
+          echo "=== Large File Check ==="
+          WARN=0
+
+          for file in $(find . -type f -not -path './.git/*' -not -path './node_modules/*' -not -path './agents/*'); do
+            SIZE=$(wc -c < "$file" | tr -d ' ')
+            if [ "$SIZE" -gt 102400 ]; then
+              KB=$(echo "scale=1; $SIZE / 1024" | bc)
+              echo "::warning file=$file::Large file: ${KB}KB. Consider splitting or compressing."
+              WARN=1
+            fi
+          done
+
+          if [ "$WARN" -eq 0 ]; then
+            echo "No oversized files found."
+          fi
