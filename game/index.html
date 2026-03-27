@@ -203,7 +203,7 @@
 
     import { spawnBurst, updateParticles, renderParticles } from './particles.js';
     import { createCompetingFungus, updateCompetingFungus, renderCompetingFungus } from './ai.js';
-    import { easeOutQuad, easeOutElastic, easeOutCubic, easeInQuad, Tween, tweens } from './easing.js';
+    import { easeOutQuad, easeOutElastic, easeOutCubic, easeOutBack, easeInQuad, Tween, tweens } from './easing.js';
 
     // --- Accessibility: reduced motion + screen reader ---
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
