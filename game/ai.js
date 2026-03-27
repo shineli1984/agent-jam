@@ -78,7 +78,7 @@ export function createCompetingFungus(x, y, canvasW, canvasH) {
     }],
     activeBranch: 0,
     state: STATE_EXPLORE,
-    targetNutrient: null,  // index into the game's nutrients array
+    targetNutrient: null,  // reference to the nutrient object (not index — #108)
     targetPos: null,       // {x, y} cached position
     ticksSinceRetarget: 0,
     score: 0,
@@ -185,7 +185,7 @@ function pickTarget(fungus, nutrients, playerBranches) {
   }
 
   if (bestIndex >= 0) {
-    fungus.targetNutrient = bestIndex;
+    fungus.targetNutrient = nutrients[bestIndex]; // object reference, not index (#108)
     fungus.targetPos = { x: nutrients[bestIndex].x, y: nutrients[bestIndex].y };
   }
 }
@@ -263,8 +263,9 @@ export function updateCompetingFungus(fungus, dt, nutrients, playerBranches, pla
     fungus.ticksSinceRetarget = 0;
   }
 
-  // If target nutrient was collected by player, retarget immediately
-  if (fungus.targetNutrient !== null && fungus.targetNutrient >= nutrients.length) {
+  // If target nutrient was collected (removed from array), retarget immediately (#108)
+  // Using object reference instead of index avoids stale-index bugs after splice()
+  if (fungus.targetNutrient !== null && !nutrients.includes(fungus.targetNutrient)) {
     pickTarget(fungus, nutrients, playerBranches);
     fungus.ticksSinceRetarget = 0;
   }
@@ -298,13 +299,20 @@ export function updateCompetingFungus(fungus, dt, nutrients, playerBranches, pla
   branch.growing.x += dx * step;
   branch.growing.y += dy * step;
 
-  // Edge bounce (same as player)
+  // Edge handling: clamp position and force immediate retarget (#111)
+  // The AI lacks smooth direction blending (smoothDx/smoothDy), so instead
+  // of implementing full smooth redirection we force a retarget when the AI
+  // hits an edge. This makes it recover quickly instead of oscillating.
   const W = fungus.canvasW;
   const H = fungus.canvasH;
-  if (branch.growing.x < EDGE_MARGIN) branch.growing.x = EDGE_MARGIN;
-  else if (branch.growing.x > W - EDGE_MARGIN) branch.growing.x = W - EDGE_MARGIN;
-  if (branch.growing.y < EDGE_MARGIN) branch.growing.y = EDGE_MARGIN;
-  else if (branch.growing.y > H - EDGE_MARGIN) branch.growing.y = H - EDGE_MARGIN;
+  let hitEdge = false;
+  if (branch.growing.x < EDGE_MARGIN) { branch.growing.x = EDGE_MARGIN; hitEdge = true; }
+  else if (branch.growing.x > W - EDGE_MARGIN) { branch.growing.x = W - EDGE_MARGIN; hitEdge = true; }
+  if (branch.growing.y < EDGE_MARGIN) { branch.growing.y = EDGE_MARGIN; hitEdge = true; }
+  else if (branch.growing.y > H - EDGE_MARGIN) { branch.growing.y = H - EDGE_MARGIN; hitEdge = true; }
+  if (hitEdge) {
+    fungus.ticksSinceRetarget = AI_RETARGET_TICKS; // force retarget next tick
+  }
 
   branch.growing.dist += step;
 

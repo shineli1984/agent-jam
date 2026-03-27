@@ -27,8 +27,11 @@ export function updateParticles(dt) {
     const p = particles[i];
     p.x += p.vx * dt;
     p.y += p.vy * dt;
-    p.vx *= 0.95;
-    p.vy *= 0.95;
+    // Framerate-independent damping (#122): pow(rate, dt * 60) gives the
+    // same visual decay at any refresh rate. At 60fps dt≈0.0167 → 0.95.
+    const damp = Math.pow(0.95, dt * 60);
+    p.vx *= damp;
+    p.vy *= damp;
     p.life -= p.decay * dt;
     if (p.life <= 0) particles.splice(i, 1);
   }
