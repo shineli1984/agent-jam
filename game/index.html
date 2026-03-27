@@ -252,6 +252,9 @@
       ENERGY_FORK_COST,
       ENERGY_REPLENISH,
       ENERGY_STARVED_THRESHOLD,
+      WOBBLE_MIN,
+      WOBBLE_SCALE,
+      TURN_SMOOTHING,
     } from './constants.js';
 
     import { spawnBurst, updateParticles, renderParticles } from './particles.js';
@@ -343,11 +346,13 @@
     const branches = [{
       tipIndex: 0,
       growing: { x: originX, y: originY, dist: 0 },
-      wobble: (Math.random() - 0.5) * 16,
+      wobble: genWobble(),
       energy: ENERGY_INITIAL,
       currentSpeed: 0,   // issue #82: velocity-based growth
       lastDx: 0,         // issue #82: last movement direction (for deceleration drift)
-      lastDy: 0
+      lastDy: 0,
+      smoothDx: 0,       // issue #63: smoothed direction for turning momentum
+      smoothDy: 0
     }];
     let activeBranch = 0;
 
@@ -374,6 +379,13 @@
     }
 
     // --- Helpers ---
+
+    // Issue #63: wobble scaled to segment length for organic curves
+    function genWobble(segLen) {
+      const range = Math.max(WOBBLE_MIN, (segLen || TENDRIL_MAX_LEN) * WOBBLE_SCALE);
+      return (Math.random() - 0.5) * range;
+    }
+
     function dist(ax, ay, bx, by) {
       const dx = ax - bx, dy = ay - by;
       return Math.sqrt(dx * dx + dy * dy);
@@ -725,7 +737,7 @@
         const newNode = { x: current.growing.x, y: current.growing.y, radius: NODE_RADIUS };
         network.nodes.push(newNode);
         const newIndex = network.nodes.length - 1;
-        network.segments.push({ from: current.tipIndex, to: newIndex, wobble: (Math.random() - 0.5) * 16, branch: activeBranch });
+        network.segments.push({ from: current.tipIndex, to: newIndex, wobble: genWobble(current.growing.dist), branch: activeBranch });
         current.tipIndex = newIndex;
         current.growing.dist = 0;
       }
@@ -736,11 +748,13 @@
       branches.push({
         tipIndex: forkTip,
         growing: { x: forkNode.x, y: forkNode.y, dist: 0 },
-        wobble: (Math.random() - 0.5) * 16,
+        wobble: genWobble(),
         energy: childEnergy, // child gets half parent's remaining energy
         currentSpeed: 0,   // issue #82: velocity-based growth
         lastDx: 0,
-        lastDy: 0
+        lastDy: 0,
+        smoothDx: 0,       // issue #63: smoothed direction
+        smoothDy: 0
       });
       activeBranch = branches.length - 1;
       if (!prefersReducedMotion) spawnBurst(forkNode.x, forkNode.y, PALETTE.myceliumGlow);
@@ -849,19 +863,29 @@
       if (branch.currentSpeed < 0.5) branch.currentSpeed = 0;
 
       if (hasInput) {
-        // Track direction for deceleration drift
+        // Normalize raw input direction
         const len = Math.sqrt(dx * dx + dy * dy);
         dx /= len; dy /= len;
         branch.lastDx = dx;
         branch.lastDy = dy;
 
+        // Issue #63: turning momentum — smoothly blend toward target direction
+        // instead of snapping instantly, producing gradual arcs at direction changes
+        const turnT = Math.min(1, TURN_SMOOTHING * dt);
+        branch.smoothDx = lerp(branch.smoothDx, dx, turnT);
+        branch.smoothDy = lerp(branch.smoothDy, dy, turnT);
+        // Re-normalize to unit vector (lerp between unit vectors isn't unit length)
+        const sLen = Math.sqrt(branch.smoothDx * branch.smoothDx + branch.smoothDy * branch.smoothDy) || 1;
+        dx = branch.smoothDx / sLen;
+        dy = branch.smoothDy / sLen;
+
         // Active growth drains extra energy
         branch.energy -= ENERGY_DRAIN_GROW * dt;
         branch.energy = Math.max(0, branch.energy);
       } else {
-        // Use last known direction for deceleration drift (overshoot)
-        dx = branch.lastDx;
-        dy = branch.lastDy;
+        // Use smoothed direction for deceleration drift (overshoot)
+        dx = branch.smoothDx || branch.lastDx;
+        dy = branch.smoothDy || branch.lastDy;
       }
 
       if (branch.currentSpeed > 0) {
@@ -888,10 +912,10 @@
           const newNode = { x: growing.x, y: growing.y, radius: NODE_RADIUS };
           network.nodes.push(newNode);
           const newIndex = network.nodes.length - 1;
-          network.segments.push({ from: tipIndex, to: newIndex, wobble: (Math.random() - 0.5) * 16, branch: activeBranch });
+          network.segments.push({ from: tipIndex, to: newIndex, wobble: genWobble(growing.dist), branch: activeBranch });
           tipIndex = newIndex;
           branch.tipIndex = newIndex;
-          branch.wobble = (Math.random() - 0.5) * 16;
+          branch.wobble = genWobble(growing.dist);
           growing.dist = 0;
         }
       }

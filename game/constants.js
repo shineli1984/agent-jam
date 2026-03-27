@@ -13,6 +13,9 @@ export const SPEED_CAP = 60;
 export const SPEED_SCALE = 0.1;
 export const TENDRIL_MAX_LEN = 40;
 export const NODE_RADIUS = 3;
+export const WOBBLE_MIN = 30;       // issue #63: minimum wobble range (px, full span ±15)
+export const WOBBLE_SCALE = 0.7;    // issue #63: wobble per pixel of segment length
+export const TURN_SMOOTHING = 6;    // issue #63: direction lerp rate (lower = wider arcs)
 export const EDGE_MARGIN = 12; // issue #31: bounce margin from canvas edge
 export const BRANCH_MIN_DIST = 15; // issue #32: minimum travel before allowing a new branch
 export const BRANCH_COOLDOWN = 200; // issue #32: ms cooldown between branches
