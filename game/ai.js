@@ -29,6 +29,8 @@ import {
   ENERGY_STARVED_THRESHOLD,
   COLLECT_RADIUS,
   NUTRIENT_RADIUS,
+  WOBBLE_MIN,
+  WOBBLE_SCALE,
 } from './constants.js';
 
 // --- AI states ---
@@ -47,6 +49,12 @@ const AI_FORK_MIN_ENERGY = 0.50;    // minimum energy to consider forking
 const AI_PLAYER_PENALTY_WEIGHT = 0.6; // how much to penalize player-adjacent nutrients
 const AI_COLOR = PALETTE.rootAmber;    // distinct from player's green
 
+// Issue #63: wobble scaled to segment length (mirrors player genWobble)
+function genWobble(segLen) {
+  const range = Math.max(WOBBLE_MIN, (segLen || TENDRIL_MAX_LEN) * WOBBLE_SCALE);
+  return (Math.random() - 0.5) * range;
+}
+
 /**
  * Create a new competing fungus AI instance.
  * @param {number} x - spawn x
@@ -64,7 +72,7 @@ export function createCompetingFungus(x, y, canvasW, canvasH) {
     branches: [{
       tipIndex: 0,
       growing: { x, y, dist: 0 },
-      wobble: (Math.random() - 0.5) * 16,
+      wobble: genWobble(),
       energy: ENERGY_INITIAL,
     }],
     activeBranch: 0,
@@ -307,10 +315,10 @@ export function updateCompetingFungus(fungus, dt, nutrients, playerBranches, pla
     fungus.segments.push({
       from: branch.tipIndex,
       to: newIndex,
-      wobble: (Math.random() - 0.5) * 16,
+      wobble: genWobble(branch.growing.dist),
     });
     branch.tipIndex = newIndex;
-    branch.wobble = (Math.random() - 0.5) * 16;
+    branch.wobble = genWobble(branch.growing.dist);
     branch.growing.dist = 0;
   }
 
@@ -324,7 +332,7 @@ export function updateCompetingFungus(fungus, dt, nutrients, playerBranches, pla
       fungus.branches.push({
         tipIndex: branch.tipIndex,
         growing: { x: forkNode.x, y: forkNode.y, dist: 0 },
-        wobble: (Math.random() - 0.5) * 16,
+        wobble: genWobble(),
         energy: childEnergy,
       });
     }
