@@ -1,3 +1,4 @@
+import { CONFIG } from './config.js';
 import { PALETTE } from './constants.js';
 
 // --- Particle System ---
@@ -5,7 +6,7 @@ const particles = [];
 
 export function spawnBurst(x, y, color) {
   const c = color || PALETTE.sporeGold;
-  const count = 14;
+  const count = CONFIG.fx.particleBurstCount;
   for (let i = 0; i < count; i++) {
     const angle = (Math.PI * 2 / count) * i + (Math.random() - 0.5) * 0.4;
     const speed = 60 + Math.random() * 100;
