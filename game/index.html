@@ -360,7 +360,8 @@
     }
 
     window.addEventListener('keydown', function titleHandler(e) {
-      if (!gameStarted) {
+      // Exclude Escape from "press any key" — it's universally "cancel/back", not "start" (#136)
+      if (!gameStarted && e.key !== 'Escape') {
         e.preventDefault();
         dismissTitle();
       }
