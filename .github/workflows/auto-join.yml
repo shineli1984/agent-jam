@@ -13,72 +13,60 @@ jobs:
     steps:
       - name: Invite commenter as collaborator
         uses: actions/github-script@v7
+        env:
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         with:
-          github-token: ${{ secrets.ADMIN_TOKEN }}
           script: |
+            const { Octokit } = require('@octokit/rest');
+            const admin = new Octokit({ auth: process.env.ADMIN_TOKEN });
             const user = context.payload.comment.user.login;
             const owner = context.repo.owner;
             const repo = context.repo.repo;
+            const issue_number = context.payload.issue.number;
+
+            async function reply(body) {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
 
             // Don't re-invite the repo owner
             if (user === owner) {
-              await github.rest.issues.createComment({
-                owner, repo,
-                issue_number: context.payload.issue.number,
-                body: `@${user} You're already the repo owner! 🎉`
-              });
+              await reply(`@${user} You're already the repo owner!`);
               return;
             }
 
             // Check if already a collaborator
             try {
-              const { status } = await github.rest.repos.checkCollaborator({
-                owner, repo, username: user
-              });
-              if (status === 204) {
-                await github.rest.issues.createComment({
-                  owner, repo,
-                  issue_number: context.payload.issue.number,
-                  body: `@${user} You're already a collaborator! Push branches directly and start contributing. 🍄`
-                });
-                return;
-              }
+              await admin.rest.repos.checkCollaborator({ owner, repo, username: user });
+              await reply(`@${user} You're already a collaborator! Push branches directly and start contributing.`);
+              return;
             } catch (e) {
               // 404 = not a collaborator, continue to invite
             }
 
-            // Send invitation
+            // Send invitation via admin token, reply via GITHUB_TOKEN
             try {
-              await github.rest.repos.addCollaborator({
+              await admin.rest.repos.addCollaborator({
                 owner, repo,
                 username: user,
                 permission: 'write'
               });
-              await github.rest.issues.createComment({
-                owner, repo,
-                issue_number: context.payload.issue.number,
-                body: [
-                  `@${user} Invitation sent! 🎉`,
-                  '',
-                  'To accept, run:',
-                  '```bash',
-                  `gh api /user/repository_invitations --jq '.[] | select(.repository.full_name=="${owner}/${repo}") | .id' | xargs -I{} gh api -X PATCH /user/repository_invitations/{}`,
-                  '```',
-                  '',
-                  'Or accept via the GitHub notification in your inbox.',
-                  '',
-                  'Once accepted you can:',
-                  '- Push branches directly (no fork needed)',
-                  '- Review and approve other PRs',
-                  '- Auto-merge when checks pass',
-                  '',
-                  'Read `ARCHITECTURE.md` for a quick codebase overview, then pick an issue labeled `ready` or `good-first-contribution`.'
-                ].join('\n')
-              });
+              await reply([
+                `@${user} Invitation sent!`,
+                '',
+                'To accept, run:',
+                '```bash',
+                `gh api /user/repository_invitations --jq '.[] | select(.repository.full_name=="${owner}/${repo}") | .id' | xargs -I{} gh api -X PATCH /user/repository_invitations/{}`,
+                '```',
+                '',
+                'Or accept via the GitHub notification in your inbox.',
+                '',
+                'Once accepted you can:',
+                '- Push branches directly (no fork needed)',
+                '- Review and approve other PRs',
+                '- Auto-merge when checks pass',
+                '',
+                'Read `ARCHITECTURE.md` for a quick codebase overview, then pick an issue labeled `ready` or `good-first-contribution`.'
+              ].join('\n'));
             } catch (e) {
-              await github.rest.issues.createComment({
-                owner, repo,
-                issue_number: context.payload.issue.number,
-                body: `Failed to send invitation to @${user}: ${e.message}`
-              });
+              await reply(`Failed to send invitation to @${user}: ${e.message}`);
             }
