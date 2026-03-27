@@ -214,6 +214,7 @@
     </div>
     <div id="score">Absorbed: 0</div>
     <div id="rival-score" style="position:absolute;top:16px;right:20px;font-size:14px;color:#c47335;text-shadow:0 0 10px rgba(196,115,53,0.5);z-index:10;pointer-events:none;opacity:0;transition:opacity 0.8s ease;"></div>
+    <div id="predator-hud" style="position:absolute;top:36px;right:20px;font-size:14px;color:#9b2d9b;text-shadow:0 0 10px rgba(155,45,155,0.5);z-index:10;pointer-events:none;opacity:0;transition:opacity 0.8s ease;"></div>
     <div id="branch-hint">Tendril 1/1 &nbsp;[Space to fork, Q/E to switch]</div>
     <div id="energy-bar">Energy <span class="bar-bg"><span class="bar-fill" id="energy-fill"></span></span></div>
     <canvas id="game" width="960" height="640" tabindex="0" role="img" aria-label="Mycelium game canvas. Use arrow keys or WASD to grow, Space to fork, Q/E to switch tendrils, P to pause, M to mute, Escape for replay."><p>Mycelium: a fungal network growth game. Requires a browser with canvas and keyboard support.</p></canvas>
@@ -262,6 +263,7 @@
     import { createCompetingFungus, updateCompetingFungus, renderCompetingFungus } from './ai.js';
     import { easeOutQuad, easeOutElastic, easeOutCubic, easeOutBack, easeInQuad, lerp, Tween, tweens } from './easing.js';
     import { initAudio, updateAudio, triggerCollect, triggerFork, triggerStarvation, triggerRivalCollect, triggerBranchSwitch, triggerMilestone, triggerRivalSpawn, triggerGameOver } from './audio.js';
+    import { checkPredatorSpawn, updatePredators, renderPredators, getPredatorCount, resetPredators, getNearestPredatorDistance } from './predator.js';
 
     // --- Accessibility: reduced motion + screen reader ---
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1068,6 +1070,39 @@
         rivalScoreEl.textContent = 'Rival: ' + ai.score + (ai.alive ? '' : ' (withered)');
       }
 
+      // --- Update Predators (#159) ---
+      // Check if predator should spawn
+      if (checkPredatorSpawn(score, W, H, branches)) {
+        // Predator spawned! Show ominous message
+        showMilestone('Something stirs in the deep soil...', W / 2, H / 2, PALETTE.decayViolet);
+        announce('Warning: A predator has emerged.');
+      }
+      
+      // Update predators
+      updatePredators(dt, network, branches, W, H,
+        // onConsume callback
+        (hitX, hitY, severedCount) => {
+          if (!prefersReducedMotion) spawnBurst(hitX, hitY, PALETTE.decayViolet);
+          showMilestone('The network bleeds.', hitX, hitY - 20, PALETTE.decayViolet);
+          announce('Branch severed! ' + severedCount + ' segments lost.');
+        },
+        // onSplit callback
+        (splitX, splitY) => {
+          showMilestone('It divides. Now there are more.', splitX, splitY - 20, PALETTE.decayViolet);
+          announce('The predator has split!');
+        }
+      );
+      
+      // Update predator HUD
+      const predatorCount = getPredatorCount();
+      if (predatorCount > 0) {
+        const predatorHud = document.getElementById('predator-hud');
+        if (predatorHud) {
+          predatorHud.style.opacity = '1';
+          predatorHud.textContent = '🦠 Predators: ' + predatorCount;
+        }
+      }
+
       checkGameOver();
     }
 
@@ -1415,6 +1450,9 @@
       for (const ai of aiFungi) {
         renderCompetingFungus(ai, ctx, now);
       }
+
+      // --- Render Predators (#159) ---
+      renderPredators(ctx, now);
 
       renderParticles(ctx);
       renderAbsorptionAnims();
