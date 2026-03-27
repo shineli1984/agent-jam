@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPORECRAWL - A Roguelike Dungeon Crawler</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #000000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: monospace;
+      color: #b8e986;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    #title-screen {
+      position: absolute;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.98) 70%);
+      transition: opacity 0.8s ease-out;
+    }
+    #title-screen.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #title-screen h1 {
+      font-size: 48px;
+      letter-spacing: 12px;
+      color: #b8e986;
+      text-shadow: 0 0 30px rgba(184, 233, 134, 0.6);
+      margin-bottom: 8px;
+    }
+    #title-screen .subtitle {
+      font-size: 14px;
+      color: #9b2d9b;
+      letter-spacing: 6px;
+      margin-bottom: 40px;
+    }
+    #title-screen .prompt {
+      font-size: 13px;
+      color: rgba(184, 233, 134, 0.5);
+      letter-spacing: 3px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    #title-screen .controls {
+      margin-top: 40px;
+      font-size: 12px;
+      color: rgba(184, 233, 134, 0.4);
+      text-align: center;
+      line-height: 1.8;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+    #back-link {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: rgba(184, 233, 134, 0.5);
+      text-decoration: none;
+      font-size: 12px;
+      z-index: 200;
+    }
+    #back-link:hover {
+      color: #b8e986;
+    }
+  </style>
+</head>
+<body>
+  <a id="back-link" href="index.html">← Back to Mycelium</a>
+  
+  <div id="title-screen">
+    <h1>SPORECRAWL</h1>
+    <div class="subtitle">A ROGUELIKE DUNGEON CRAWLER</div>
+    <div class="prompt">press any key to begin</div>
+    <div class="controls">
+      WASD / Arrows — Move & Attack<br>
+      H — Use Health Potion<br>
+      J — Spore Burst (AoE damage)<br>
+      R — Restart<br><br>
+      Reach floor 10 to escape!
+    </div>
+  </div>
+  
+  <canvas id="game" width="960" height="640" tabindex="0"></canvas>
+
+  <script type="module">
+    import { initGame, movePlayer, usePotion, useSpore, renderGame, isGameOver, getGameState } from './roguelike.js';
+    
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width;
+    const H = canvas.height;
+    
+    const titleScreen = document.getElementById('title-screen');
+    let gameStarted = false;
+    
+    // Input handling
+    const keys = {};
+    
+    function dismissTitle() {
+      if (gameStarted) return;
+      gameStarted = true;
+      titleScreen.classList.add('fade-out');
+      setTimeout(() => titleScreen.remove(), 800);
+      canvas.focus();
+      initGame();
+    }
+    
+    window.addEventListener('keydown', (e) => {
+      if (!gameStarted) {
+        e.preventDefault();
+        dismissTitle();
+        return;
+      }
+      
+      // Prevent key repeat
+      if (keys[e.key]) return;
+      keys[e.key] = true;
+      
+      // Movement
+      let dx = 0, dy = 0;
+      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') dy = -1;
+      if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') dy = 1;
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') dx = -1;
+      if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') dx = 1;
+      
+      if (dx !== 0 || dy !== 0) {
+        e.preventDefault();
+        movePlayer(dx, dy);
+      }
+      
+      // Actions
+      if (e.key === 'h' || e.key === 'H') {
+        usePotion();
+      }
+      if (e.key === 'j' || e.key === 'J') {
+        useSpore();
+      }
+      if (e.key === 'r' || e.key === 'R') {
+        initGame();
+      }
+    });
+    
+    window.addEventListener('keyup', (e) => {
+      keys[e.key] = false;
+    });
+    
+    titleScreen.addEventListener('click', dismissTitle);
+    
+    // Game loop
+    function gameLoop() {
+      if (gameStarted) {
+        renderGame(ctx, W, H);
+      } else {
+        // Render preview
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, W, H);
+      }
+      
+      requestAnimationFrame(gameLoop);
+    }
+    
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
