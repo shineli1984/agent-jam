@@ -852,8 +852,9 @@
       if (allStarved) {
         gameOver = true;
         if (!muted) triggerGameOver();
-        const elapsed = ((performance.now() - gameStartTime) / 1000).toFixed(0);
-        const statsText = 'Absorbed: ' + score + '  |  Tendrils: ' + branches.length + '  |  ' + elapsed + 's survived';
+        // Use active play time (excludes paused time) for accurate timing (#144)
+        const playTime = activePlayTime.toFixed(0);
+        const statsText = 'Absorbed: ' + score + '  |  Tendrils: ' + branches.length + '  |  ' + playTime + 's played';
         gameOverStats.textContent = statsText;
         gameOverOverlay.classList.add('visible');
         announce('All tendrils have withered. ' + statsText + '. Press R to restart.');
@@ -861,6 +862,8 @@
     }
 
     let gameStartTime = 0;
+    let activePlayTime = 0; // Track actual play time (excludes paused time) #144
+    let lastFrameTime = 0;  // For calculating dt when tracking active time
 
     function update(dt) {
       if (!gameStarted || paused || gameOver) return;
@@ -1545,6 +1548,7 @@
         // Skip while paused or after game over to avoid wasting memory on identical frames (#135)
         if (gameStarted && !paused && !gameOver) {
           frameCount++;
+          activePlayTime += dt; // Track actual play time (#144)
           if (frameCount % SNAPSHOT_INTERVAL === 0) {
             captureSnapshot();
           }
