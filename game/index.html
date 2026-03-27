@@ -705,6 +705,61 @@
       }
     }
 
+    // --- Segment ripple — secondary motion (issue #83) ---
+    // When a tip advances far enough to commit a new segment, a wobble impulse
+    // propagates backward through the 3-4 nearest segments on the same branch.
+    // Each segment's wobble oscillates via a damped spring and settles back to
+    // its rest position within ~300ms. Forks inject a stronger impulse.
+    // Purely visual — no gameplay impact.
+
+    /**
+     * Inject a ripple impulse into segments near a branch tip.
+     * @param {number} branchIndex — the branch that just grew or forked
+     * @param {number} impulse — initial wobbleVelocity magnitude
+     */
+    function injectSegmentRipple(branchIndex, impulse) {
+      if (prefersReducedMotion) return;
+      const depth = CONFIG.fx.rippleDepth;
+      const decay = CONFIG.fx.rippleDecay;
+      // Walk backward through segments belonging to this branch, newest first
+      let count = 0;
+      for (let i = network.segments.length - 1; i >= 0 && count < depth; i--) {
+        const seg = network.segments[i];
+        if (seg.branch !== branchIndex) continue;
+        // Initialize spring properties if missing
+        if (seg.restWobble === undefined) {
+          seg.restWobble = seg.wobble;
+          seg.wobbleVelocity = 0;
+        }
+        // Impulse decays with distance from the tip
+        const factor = Math.pow(1 - decay, count);
+        seg.wobbleVelocity += impulse * factor * (Math.random() > 0.5 ? 1 : -1);
+        count++;
+      }
+    }
+
+    /**
+     * Update damped-spring wobble on all segments that have active velocity.
+     * Called once per frame from the game loop.
+     * Spring equation: a = -stiffness * displacement - damping * velocity
+     */
+    function updateSegmentRipples(dt) {
+      const stiffness = CONFIG.fx.rippleStiffness;
+      const damping = CONFIG.fx.rippleDamping;
+      for (const seg of network.segments) {
+        if (seg.wobbleVelocity === undefined || seg.wobbleVelocity === 0) continue;
+        const displacement = seg.wobble - seg.restWobble;
+        const accel = -stiffness * displacement - damping * seg.wobbleVelocity;
+        seg.wobbleVelocity += accel * dt;
+        seg.wobble += seg.wobbleVelocity * dt;
+        // Kill tiny oscillations to avoid infinite micro-updates
+        if (Math.abs(seg.wobbleVelocity) < 0.5 && Math.abs(displacement) < 0.2) {
+          seg.wobble = seg.restWobble;
+          seg.wobbleVelocity = 0;
+        }
+      }
+    }
+
     // --- Nutrient absorption animation (squash-and-pop) ---
     const absorptionAnims = []; // {x, y, age, duration, color}
 
@@ -805,10 +860,13 @@
         const newNode = { x: current.growing.x, y: current.growing.y, radius: NODE_RADIUS };
         network.nodes.push(newNode);
         const newIndex = network.nodes.length - 1;
-        network.segments.push({ from: current.tipIndex, to: newIndex, wobble: genWobble(current.growing.dist), branch: activeBranch });
+        const forkSegWobble = genWobble(current.growing.dist);
+        network.segments.push({ from: current.tipIndex, to: newIndex, wobble: forkSegWobble, restWobble: forkSegWobble, wobbleVelocity: 0, branch: activeBranch });
         current.tipIndex = newIndex;
         current.growing.dist = 0;
       }
+      // Fork ripple: stronger impulse propagates backward through parent branch (#83)
+      injectSegmentRipple(activeBranch, CONFIG.fx.rippleForkImpulse);
       const forkTip = current.tipIndex;
       const forkNode = network.nodes[forkTip];
       const childEnergy = current.energy * 0.5;
@@ -1007,7 +1065,10 @@
           const newNode = { x: growing.x, y: growing.y, radius: NODE_RADIUS };
           network.nodes.push(newNode);
           const newIndex = network.nodes.length - 1;
-          network.segments.push({ from: tipIndex, to: newIndex, wobble: genWobble(growing.dist), branch: activeBranch });
+          const segWobble = genWobble(growing.dist);
+          network.segments.push({ from: tipIndex, to: newIndex, wobble: segWobble, restWobble: segWobble, wobbleVelocity: 0, branch: activeBranch });
+          // Ripple: new segment sends a wobble impulse backward (#83)
+          injectSegmentRipple(activeBranch, CONFIG.fx.rippleImpulse);
           tipIndex = newIndex;
           branch.tipIndex = newIndex;
           branch.wobble = genWobble(growing.dist);
@@ -1021,6 +1082,7 @@
       updateEnergyBar();
       tweens.update(dt);
       updateForkRipples(dt);
+      updateSegmentRipples(dt); // issue #83: secondary motion on segments
       updateAbsorptionAnims(dt);
 
       // --- Magnetic nutrient pull — active branch only (issue #90) ---
