@@ -130,6 +130,7 @@ const DEFAULTS = Object.freeze({
     particleBurstCount: 14,  // particles per burst
     snapshotInterval: 6,     // capture every N frames for timelapse
     replaySpeed: 10,         // snapshots advanced per frame during replay
+    maxSnapshots: 200,       // ring buffer cap for timelapse (prevents memory leak #106)
     // Segment ripple — secondary motion (issue #83)
     rippleStiffness: 120,    // spring stiffness — higher = faster oscillation
     rippleDamping: 8,        // spring damping — higher = settles quicker

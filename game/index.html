@@ -1415,16 +1415,25 @@
       renderMilestones();
     }
 
-    // --- Timelapse Replay (issue #41) ---
+    // --- Timelapse Replay (issue #41, #106) ---
     const replaySnapshots = [];
     let frameCount = 0;
+    let snapshotWriteIndex = 0; // ring buffer write position (#106)
     const SNAPSHOT_INTERVAL = CONFIG.fx.snapshotInterval; // capture interval (issue #119)
     let replayMode = false;
     let replayIndex = 0;
     let replayDone = false;
 
     function captureSnapshot() {
-      replaySnapshots.push(canvas.toDataURL('image/png'));
+      // Ring buffer to prevent memory leak (#106)
+      // Cap at maxSnapshots — old frames get overwritten
+      const maxSnapshots = CONFIG.fx.maxSnapshots;
+      if (replaySnapshots.length < maxSnapshots) {
+        replaySnapshots.push(canvas.toDataURL('image/png'));
+      } else {
+        replaySnapshots[snapshotWriteIndex % maxSnapshots] = canvas.toDataURL('image/png');
+      }
+      snapshotWriteIndex++;
     }
 
     function startReplay() {
@@ -1432,6 +1441,20 @@
       replayMode = true;
       replayIndex = 0;
       replayDone = false;
+    }
+
+    // Get the actual snapshot at logical index, accounting for ring buffer (#106)
+    function getReplaySnapshot(logicalIndex) {
+      const maxSnapshots = CONFIG.fx.maxSnapshots;
+      const len = replaySnapshots.length;
+      if (len < maxSnapshots) {
+        // Buffer not full yet — straightforward linear access
+        return replaySnapshots[logicalIndex];
+      }
+      // Buffer is full — oldest frame is at snapshotWriteIndex % maxSnapshots
+      const startIndex = snapshotWriteIndex % maxSnapshots;
+      const actualIndex = (startIndex + logicalIndex) % len;
+      return replaySnapshots[actualIndex];
     }
 
     function renderReplayFrame() {
@@ -1463,7 +1486,7 @@
         ctx.fillText('REPLAY', W - 20, 30);
         ctx.restore();
       };
-      img.src = replaySnapshots[replayIndex];
+      img.src = getReplaySnapshot(Math.floor(replayIndex));
 
       // Replay speed configurable via CONFIG (issue #119)
       replayIndex += CONFIG.fx.replaySpeed;
