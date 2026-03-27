@@ -130,6 +130,13 @@ const DEFAULTS = Object.freeze({
     particleBurstCount: 14,  // particles per burst
     snapshotInterval: 6,     // capture every N frames for timelapse
     replaySpeed: 10,         // snapshots advanced per frame during replay
+    // Segment ripple — secondary motion (issue #83)
+    rippleStiffness: 120,    // spring stiffness — higher = faster oscillation
+    rippleDamping: 8,        // spring damping — higher = settles quicker
+    rippleImpulse: 18,       // wobble velocity injected per new segment
+    rippleForkImpulse: 35,   // stronger impulse on fork events
+    rippleDepth: 4,          // how many segments back the ripple reaches
+    rippleDecay: 0.3,        // amplitude falloff per segment (multiplied)
   },
 
   // --- Audio ---
