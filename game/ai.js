@@ -13,6 +13,7 @@
  * fork cost. It grows at ~75% of player speed (worse decisions, not slower animation).
  */
 
+import { CONFIG } from './config.js';
 import {
   PALETTE,
   BASE_GROW_SPEED,
@@ -38,15 +39,15 @@ const STATE_EXPLORE = 'EXPLORE';
 const STATE_COMPETE = 'COMPETE';
 const STATE_RETREAT = 'RETREAT';
 
-// --- AI tuning ---
-const AI_SPEED_FACTOR = 0.75;       // 75% of player speed (decisions, not animation)
-const AI_JITTER = 0.20;             // ±20% score noise
-const AI_RETREAT_THRESHOLD = 0.20;  // enter RETREAT below this energy
-const AI_COMPETE_THRESHOLD = 0.55;  // enter COMPETE above this energy
-const AI_RETARGET_TICKS = 90;       // re-evaluate target every N ticks (hysteresis)
-const AI_FORK_CHANCE = 0.008;       // probability per tick to attempt fork
-const AI_FORK_MIN_ENERGY = 0.50;    // minimum energy to consider forking
-const AI_PLAYER_PENALTY_WEIGHT = 0.6; // how much to penalize player-adjacent nutrients
+// --- AI tuning (now configurable via CONFIG.ai — issue #119) ---
+const AI_SPEED_FACTOR = CONFIG.ai.speedFactor;
+const AI_JITTER = CONFIG.ai.jitter;
+const AI_RETREAT_THRESHOLD = CONFIG.ai.retreatThreshold;
+const AI_COMPETE_THRESHOLD = CONFIG.ai.competeThreshold;
+const AI_RETARGET_TICKS = CONFIG.ai.retargetTicks;
+const AI_FORK_CHANCE = CONFIG.ai.forkChance;
+const AI_FORK_MIN_ENERGY = CONFIG.ai.forkMinEnergy;
+const AI_PLAYER_PENALTY_WEIGHT = CONFIG.ai.playerPenaltyWeight;
 const AI_COLOR = PALETTE.rootAmber;    // distinct from player's green
 
 // Issue #63: wobble scaled to segment length (mirrors player genWobble)
@@ -170,9 +171,9 @@ function pickTarget(fungus, nutrients, playerBranches) {
         const pd = dist(nutrients[i].x, nutrients[i].y, pb.growing.x, pb.growing.y);
         if (pd < minPlayerDist) minPlayerDist = pd;
       }
-      // Contested: both AI and player are within 150px
+      // Contested: both AI and player are within contest distance (issue #119)
       const aiDist = dist(nutrients[i].x, nutrients[i].y, tipX, tipY);
-      if (minPlayerDist < 150 && aiDist < 150) {
+      if (minPlayerDist < CONFIG.ai.contestDistance && aiDist < CONFIG.ai.contestDistance) {
         s *= 1.5; // bonus for contested nutrients when we're strong
       }
     }
@@ -202,7 +203,7 @@ function updateState(fungus, playerBranches) {
     // Only compete if there are player branches nearby
     let hasNearbyPlayer = false;
     for (const pb of playerBranches) {
-      if (dist(branch.growing.x, branch.growing.y, pb.growing.x, pb.growing.y) < 250) {
+      if (dist(branch.growing.x, branch.growing.y, pb.growing.x, pb.growing.y) < CONFIG.ai.nearbyPlayerDistance) {
         hasNearbyPlayer = true;
         break;
       }

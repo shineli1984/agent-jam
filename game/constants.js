@@ -1,38 +1,52 @@
-// --- Palette (issue #14: Mycelium visual identity) ---
-export const PALETTE = {
-  deepSoil:     '#0a0e0f',
-  myceliumGlow: '#b8e986',
-  sporeGold:    '#f4d35e',
-  rootAmber:    '#c47335',
-  decayViolet:  '#7b2d8e',
-};
+/**
+ * constants.js — Backwards-compatible re-export layer (issue #119)
+ *
+ * All values now live in config.js as the single source of truth.
+ * This file re-exports them as named constants so existing imports
+ * in index.html, ai.js, and particles.js continue to work with
+ * zero changes to those files.
+ *
+ * Values are read from CONFIG at import time. Preset loading should
+ * happen before the game initializes (which it does — config.js is
+ * imported first and presets are applied before the game loop starts).
+ */
+
+import { CONFIG } from './config.js';
+
+// --- Palette (object reference — mutations to CONFIG.palette propagate) ---
+export const PALETTE = CONFIG.palette;
 
 // --- Growth constants ---
-export const BASE_GROW_SPEED = 120;
-export const SPEED_CAP = 60;
-export const SPEED_SCALE = 0.1;
-export const TENDRIL_MAX_LEN = 40;
-export const NODE_RADIUS = 3;
-export const WOBBLE_MIN = 30;       // issue #63: minimum wobble range (px, full span ±15)
-export const WOBBLE_SCALE = 0.7;    // issue #63: wobble per pixel of segment length
-export const TURN_SMOOTHING = 6;    // issue #63: direction lerp rate (lower = wider arcs)
-export const EDGE_MARGIN = 12; // issue #31: bounce margin from canvas edge
-export const BRANCH_MIN_DIST = 15; // issue #32: minimum travel before allowing a new branch
-export const BRANCH_COOLDOWN = 200; // issue #32: ms cooldown between branches
+export const BASE_GROW_SPEED  = CONFIG.growth.baseSpeed;
+export const SPEED_CAP        = CONFIG.growth.speedCap;
+export const SPEED_SCALE      = CONFIG.growth.speedScale;
+export const TENDRIL_MAX_LEN  = CONFIG.growth.tendrilMaxLen;
+export const NODE_RADIUS      = CONFIG.growth.nodeRadius;
+export const WOBBLE_MIN       = CONFIG.growth.wobbleMin;
+export const WOBBLE_SCALE     = CONFIG.growth.wobbleScale;
+export const TURN_SMOOTHING   = CONFIG.growth.turnSmoothing;
+export const EDGE_MARGIN      = CONFIG.growth.edgeMargin;
 
-// --- Nutrient constants ---
-export const NUTRIENT_COUNT = 8;
-export const NUTRIENT_RADIUS = 5;
-export const COLLECT_RADIUS = 35; // issue #22: generous collision (was ~13px)
-export const MAGNETIC_RADIUS = 70; // issue #90: reduced from 130 — player must get closer before pull kicks in
-export const MAGNETIC_STRENGTH = 180; // base pull force (px/s^2)
-export const MAGNETIC_DAMPING = 0.92; // velocity damping per frame (keeps motion smooth)
+// --- Branching ---
+export const BRANCH_MIN_DIST  = CONFIG.branching.minDist;
+export const BRANCH_COOLDOWN  = CONFIG.branching.cooldown;
 
-// --- Energy constants (issue #40: soft starvation) ---
-export const ENERGY_MAX = 1.0;
-export const ENERGY_INITIAL = 1.0;
-export const ENERGY_DRAIN_IDLE = 0.015;   // per second, passive drain
-export const ENERGY_DRAIN_GROW = 0.08;    // per second, while actively growing
-export const ENERGY_FORK_COST = 0.15;     // flat cost to fork a new branch
-export const ENERGY_REPLENISH = 0.4;      // gained when nearest branch absorbs nutrient
-export const ENERGY_STARVED_THRESHOLD = 0; // at or below this, branch is starved
+// --- Nutrients ---
+export const NUTRIENT_COUNT   = CONFIG.nutrients.count;
+export const NUTRIENT_RADIUS  = CONFIG.nutrients.radius;
+export const COLLECT_RADIUS   = CONFIG.nutrients.collectRadius;
+export const MAGNETIC_RADIUS  = CONFIG.nutrients.magneticRadius;
+export const MAGNETIC_STRENGTH = CONFIG.nutrients.magneticStrength;
+export const MAGNETIC_DAMPING = CONFIG.nutrients.magneticDamping;
+
+// --- Energy ---
+export const ENERGY_MAX              = CONFIG.energy.max;
+export const ENERGY_INITIAL          = CONFIG.energy.initial;
+export const ENERGY_DRAIN_IDLE       = CONFIG.energy.drainIdle;
+export const ENERGY_DRAIN_GROW       = CONFIG.energy.drainGrow;
+export const ENERGY_FORK_COST        = CONFIG.energy.forkCost;
+export const ENERGY_REPLENISH        = CONFIG.energy.replenish;
+export const ENERGY_STARVED_THRESHOLD = CONFIG.energy.starvedThreshold;
+
+// Re-export CONFIG for files that want direct access
+export { CONFIG };
