@@ -1542,7 +1542,8 @@
         render(now);
 
         // Capture snapshot every SNAPSHOT_INTERVAL frames
-        if (gameStarted) {
+        // Skip while paused or after game over to avoid wasting memory on identical frames (#135)
+        if (gameStarted && !paused && !gameOver) {
           frameCount++;
           if (frameCount % SNAPSHOT_INTERVAL === 0) {
             captureSnapshot();
