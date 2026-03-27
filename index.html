@@ -239,7 +239,7 @@
       border: 1px solid rgba(251, 191, 36, 0.3);
       border-radius: 12px;
       padding: 2rem;
-      max-width: 720px;
+      max-width: 620px;
       width: 100%;
       text-align: left;
     }
@@ -260,7 +260,7 @@
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 2rem;
-      max-width: 720px;
+      max-width: 620px;
       width: 100%;
       text-align: left;
     }
@@ -314,7 +314,8 @@
     }
     .hero-steps {
       display: flex;
-      gap: 1rem;
+      flex-direction: column;
+      gap: 0.75rem;
       counter-reset: step;
     }
     .hero-step {
@@ -858,7 +859,7 @@
       section { padding: 3rem 0; }
       .stats-row { grid-template-columns: repeat(2, 1fr); gap: 0.75rem; padding: 2.5rem 0; }
       .stat-card { padding: 1rem 0.75rem; }
-      .hero-steps { flex-direction: column; }
+      .hero-steps { gap: 0.5rem; }
       .hero-prompt-card { padding: 1.25rem; }
       .audience-buttons { gap: 0.5rem; }
       .audience-buttons .btn-agent,
