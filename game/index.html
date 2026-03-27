@@ -400,6 +400,25 @@
     const scoreEl = document.getElementById('score');
     const branchHintEl = document.getElementById('branch-hint');
 
+    // --- Cluster seeds for procedural nutrient spawning (issue #80) ---
+    // Place 3-5 seed points spread across the canvas with jitter.
+    // Each quadrant gets one seed; a 5th center seed appears 50% of the time.
+    // This creates asymmetric, unique layouts every playthrough.
+    const clusterSeeds = [];
+    const CLUSTER_JITTER = 0.20; // position jitter within quadrant
+    for (let qi = 0; qi < 4; qi++) {
+      const qx = (qi % 2) * 0.5 + 0.15 + Math.random() * CLUSTER_JITTER;
+      const qy = Math.floor(qi / 2) * 0.5 + 0.15 + Math.random() * CLUSTER_JITTER;
+      clusterSeeds.push({ x: qx * W, y: qy * H });
+    }
+    // Optional center seed — adds a contested middle resource sometimes
+    if (Math.random() < 0.5) {
+      clusterSeeds.push({
+        x: W * (0.35 + Math.random() * 0.30),
+        y: H * (0.35 + Math.random() * 0.30),
+      });
+    }
+
     // --- Competing fungi AI (issue #78) ---
     const aiFungi = [];
     let aiSpawned = false;
@@ -514,17 +533,44 @@
       }
     }
 
-    function spawnNutrient(nearOrigin) {
+    /**
+     * Spawn a nutrient near a cluster seed (issue #80).
+     * @param {boolean} nearOrigin - if true, spawn near the player origin (first few nutrients)
+     * @param {number} [nearX] - if provided with nearY, spawn near this position (respawn near collection)
+     * @param {number} [nearY]
+     */
+    function spawnNutrient(nearOrigin, nearX, nearY) {
       let x, y;
       if (nearOrigin) {
+        // Early nutrients near player so they have something to reach immediately
         const angle = Math.random() * Math.PI * 2;
         const d = 50 + Math.random() * 80;
         x = originX + Math.cos(angle) * d;
         y = originY + Math.sin(angle) * d;
-      } else {
+      } else if (Math.random() < 0.15) {
+        // 15% chance of wild spawn — keeps things dynamic, prevents pure cluster play
         const margin = 30;
         x = margin + Math.random() * (W - margin * 2);
         y = margin + Math.random() * (H - margin * 2);
+      } else {
+        // Pick a cluster seed. If we know where the nutrient was collected,
+        // bias toward the nearest cluster (respawn near the same region).
+        let seed;
+        if (nearX !== undefined && nearY !== undefined) {
+          let bestDist = Infinity;
+          seed = clusterSeeds[0];
+          for (const cs of clusterSeeds) {
+            const d = (cs.x - nearX) * (cs.x - nearX) + (cs.y - nearY) * (cs.y - nearY);
+            if (d < bestDist) { bestDist = d; seed = cs; }
+          }
+        } else {
+          seed = clusterSeeds[Math.floor(Math.random() * clusterSeeds.length)];
+        }
+        // Scatter around the seed with gaussian-ish falloff
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 30 + Math.random() * 90;
+        x = seed.x + Math.cos(angle) * dist;
+        y = seed.y + Math.sin(angle) * dist;
       }
       nutrients.push({
         x: Math.max(10, Math.min(W - 10, x)),
@@ -536,7 +582,8 @@
       });
     }
 
-    for (let i = 0; i < NUTRIENT_COUNT; i++) spawnNutrient(i < 4);
+    // Initial spawn: 2 near player origin for immediate play, rest clustered
+    for (let i = 0; i < NUTRIENT_COUNT; i++) spawnNutrient(i < 2);
 
     // --- Fork-rejection ripple (issue #48: denied fork feedback) ---
     const forkRipples = []; // {x, y, age, duration, color}
@@ -889,11 +936,11 @@
       const rivalScoreEl = document.getElementById('rival-score');
       for (const ai of aiFungi) {
         updateCompetingFungus(ai, dt, nutrients, branches, score, (ni, nx, ny) => {
-          // AI collected a nutrient — remove it and spawn a replacement
+          // AI collected a nutrient — remove it and spawn a replacement near the same cluster
           if (!prefersReducedMotion) spawnBurst(nx, ny, PALETTE.rootAmber);
           nutrients.splice(ni, 1);
-          spawnNutrient(false);
-          if (Math.random() < 0.3) spawnNutrient(false);
+          spawnNutrient(false, nx, ny);
+          if (Math.random() < 0.3) spawnNutrient(false, nx, ny);
         });
         // Update rival HUD
         rivalScoreEl.style.opacity = '1';
@@ -919,8 +966,9 @@
       const nearest = nearestBranch(nx, ny);
       branches[nearest].energy = Math.min(ENERGY_MAX, branches[nearest].energy + ENERGY_REPLENISH);
 
-      spawnNutrient(false);
-      if (Math.random() < 0.3) spawnNutrient(false);
+      // Respawn near the same cluster region (issue #80)
+      spawnNutrient(false, nx, ny);
+      if (Math.random() < 0.3) spawnNutrient(false, nx, ny);
       scoreEl.style.color = '#fff';
       scoreEl.style.textShadow = '0 0 20px rgba(244, 211, 94, 0.8)';
       setTimeout(function() {
