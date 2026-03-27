@@ -112,6 +112,8 @@ const DEFAULTS = Object.freeze({
       10: 'You are not alone.',
       20: 'The forest remembers.',
     },
+    awakeningMessage: 'Reach toward the glow.',
+    awakeningDelay: 1.5,          // seconds after game start before awakening message
     starvationMessage: 'A tendril withers. The network endures.',
     floaterDuration: 4,      // seconds
     floaterDriftSpeed: 18,   // px/s upward
@@ -163,6 +165,7 @@ export const PRESETS = {
       enabled: false,
     },
     milestones: {
+      awakeningMessage: 'Follow the warmth.',
       messages: {
         1:  'Breathe.',
         3:  'The soil is warm.',
@@ -210,6 +213,8 @@ export const PRESETS = {
       forkMinEnergy: 0.30,
     },
     milestones: {
+      awakeningMessage: 'Hungry.',
+      awakeningDelay: 0.8,
       messages: {
         1:  'Feed.',
         3:  'Faster.',

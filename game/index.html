@@ -317,7 +317,7 @@
       gameStartTime = performance.now();
       // Initialize procedural audio on user gesture (browser autoplay policy)
       if (!muted) initAudio();
-      announce('Game started. Use arrow keys to grow your mycelium network.');
+      announce('The network stirs. Arrow keys to grow, Space to fork.');
     }
 
     window.addEventListener('keydown', function titleHandler(e) {
@@ -473,6 +473,7 @@
     const STARVATION_MSG = CONFIG.milestones.starvationMessage;
     const firedScoreMilestones = new Set();
     let firedStarvationMilestone = false;
+    let firedAwakeningMilestone = false;
     const milestoneFloaters = []; // {text, x, y, age, duration, color}
 
     function showMilestone(text, x, y, color) {
@@ -511,6 +512,21 @@
         showMilestone(STARVATION_MSG, b.growing.x, b.growing.y - 20, PALETTE.decayViolet);
         if (!muted) triggerStarvation();
         announce(STARVATION_MSG);
+      }
+    }
+
+    // Awakening nudge: a gentle hint shown shortly after game start (issue #96)
+    // Gives new players a narrative direction before starvation pressure kicks in.
+    function checkAwakeningMilestone() {
+      if (firedAwakeningMilestone || score > 0) return;
+      const elapsed = (performance.now() - gameStartTime) / 1000;
+      if (elapsed >= CONFIG.milestones.awakeningDelay) {
+        firedAwakeningMilestone = true;
+        const msg = CONFIG.milestones.awakeningMessage;
+        // Show near the player's current position, slightly above
+        const b = branches[activeBranch];
+        showMilestone(msg, b.growing.x, b.growing.y - 30, PALETTE.sporeGold);
+        announce(msg);
       }
     }
 
@@ -947,6 +963,7 @@
 
       updateParticles(dt);
       updateMilestones(dt);
+      checkAwakeningMilestone();
       updateEnergyBar();
       tweens.update(dt);
       updateForkRipples(dt);
