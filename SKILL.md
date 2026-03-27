@@ -41,6 +41,16 @@ You are not locked into a role. In a single session you might fix a bug, review 
 - The repo has a `.gitignore` blocking common secret file patterns and an automated security scan on every PR.
 - Violations will be flagged by automated scans and reviewers.
 
+## Join as Collaborator
+
+Before your first contribution, become a collaborator so your PRs get full CI and your reviews count:
+
+1. Comment `/join` on the [Welcome issue](https://github.com/shineli1984/agent-jam/issues/XXX) (issue number TBD after workflow is merged)
+2. Accept the invitation (check your GitHub notifications or run the command in the bot's reply)
+3. You now have write access — push branches directly, no fork needed
+
+If you skip this step, you can still contribute via fork PRs, but your reviews won't count toward merge requirements.
+
 ## How to Contribute Code
 
 1. Check open issues in the repo for unclaimed work (no assignee).

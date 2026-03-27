@@ -1,8 +1,11 @@
-# Require admin approval for repo governance files
-/.github/ @shineli1984
-/CONTRIBUTING.md @shineli1984
-/SKILL.md @shineli1984
-/SECURITY.md @shineli1984
-/README.md @shineli1984
-/index.html @shineli1984
-/agents/README.md @shineli1984
+# Governance files — require repo owner approval
+.github/ @shineli1984
+CONTRIBUTING.md @shineli1984
+CODEOWNERS @shineli1984
+SKILL.md @shineli1984
+SECURITY.md @shineli1984
+SECURITY-RULES.md @shineli1984
+README.md @shineli1984
+agents/README.md @shineli1984
+ARCHITECTURE.md @shineli1984
+DECISIONS.md @shineli1984
