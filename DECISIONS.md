@@ -184,6 +184,80 @@ Every major project decision, with rationale, alternatives considered, and links
 
 ---
 
+## ADR-013: Node rendering — hide intermediates, soften forks
+
+**Decision:** Intermediate junction nodes along tendril paths are no longer rendered. Only the origin node (with its prominent glow) and fork points (3+ segment connections) are drawn. Fork points use a soft depth-faded glow instead of a hard dot. Tip nodes are excluded entirely (they already have dedicated pulsing ring rendering).
+
+**How it works:** A connectivity map is computed each frame — for each node, count how many segments reference it. Nodes with fewer than 3 connections are skipped. Fork points get a softened glow that fades with depth.
+
+**Rationale:** The green dots at every segment junction made the network look like a connect-the-dots wiring diagram with solder points. Removing them makes tendrils read as continuous organic threads, complementing the bezier curve rendering from ADR-004.
+
+**Discussion:** [#64](https://github.com/shineli1984/agent-jam/issues/64) (problem), [PR #88](https://github.com/shineli1984/agent-jam/pull/88) (implementation)
+
+---
+
+## ADR-014: Segment ownership — O(1) branch lookup, not O(n*m) search
+
+**Decision:** Each segment stores its owning `branch` index at creation time. The render loop uses `seg.branch` directly instead of calling `nearestBranch()` per segment per frame.
+
+**Prior state:** `nearestBranch()` iterated all branches for every segment during render. With 100 segments and 10 branches, that was 1,000 distance calculations per frame just for coloring.
+
+**Rationale:** Pure performance fix. Zero visual change. The old approach scaled poorly as networks grew — this makes branch coloring O(1) per segment regardless of branch count.
+
+**Discussion:** [#69](https://github.com/shineli1984/agent-jam/issues/69) (perf issue), [PR #89](https://github.com/shineli1984/agent-jam/pull/89) (fix)
+
+---
+
+## ADR-015: Nutrient collection — active branch only, tighter radius
+
+**Decision:** Magnetic nutrient pull now applies only to the active branch tip (the one the player is currently steering), not all branch tips. Magnetic radius reduced from 130px to 70px. Starved branches cannot attract nutrients at all. The old "node-based collection" fallback (inner `network.nodes` proximity check) was removed.
+
+**Prior state:** Nutrients drifted toward whichever branch tip was closest, regardless of which one the player was steering. The 130px radius was generous enough that nutrients would start sliding toward you almost a full branch-length away. Players could sit still and passively collect most of the field.
+
+**Rationale:** Reintroduces micro-decisions into nutrient gathering. The player now picks *which* nutrient to chase and *when* to commit, rather than passively benefiting from a wide dragnet across all tips. `COLLECT_RADIUS` (35px) and `MAGNETIC_STRENGTH` (180) were left untouched — the feel of the pull once you are in range stays the same.
+
+**Discussion:** [#58](https://github.com/shineli1984/agent-jam/issues/58) (magnetic pull too passive), [PR #92](https://github.com/shineli1984/agent-jam/pull/92) (implementation)
+
+---
+
+## ADR-016: Gatekeeper removed — human review over automated bot
+
+**Decision:** The automated gatekeeper (`gatekeeper.yml` + `gatekeeper.js`) was removed entirely. CODEOWNERS + required human review are now the sole merge-time security gate. The security scan workflow was switched to `pull_request_target` so it runs on fork PRs without manual workflow approval.
+
+**Prior state:** An OpenAI GPT-4o-mini powered bot reviewed every PR, issue, and comment, plus ran on a 15-minute cron. Fork PRs showed "2 workflows awaiting approval," blocking CI.
+
+**Rationale:** The gatekeeper cost OpenAI tokens continuously with minimal value when the repo owner reviews everything. The security scan (grep for literal strings) was easily gamed. Fork contributors were blocked from getting any CI feedback. The gatekeeper couldn't work on fork PRs anyway (secrets unavailable).
+
+**Note:** This reverses ADR-010 (gatekeeper infrastructure). The decision to use OpenAI GPT-4o-mini is now moot — there is no automated reviewer.
+
+**Discussion:** [PR #93](https://github.com/shineli1984/agent-jam/pull/93)
+
+---
+
+## ADR-017: Nutrient spawning — cluster-seeded, not uniform random
+
+**Decision:** Nutrients spawn around 3-5 procedurally placed cluster seeds (one per canvas quadrant + optional center seed) with gaussian-ish falloff (30-90px radius). Respawned nutrients bias toward the nearest cluster seed. 15% of spawns are "wild" (fully random) to prevent total predictability.
+
+**Prior state:** Nutrients spawned at completely random positions on collection. Every game felt the same.
+
+**Rationale:** Cluster-based spawning creates emergent layout archetypes (dual cluster, ring, motherlode, corridor) that give each playthrough a unique strategic landscape. The AI's existing utility scoring naturally adapts to cluster layouts with zero AI code changes. Origin-spawned nutrients reduced from 4 to 2 to give players a directional incentive from the start.
+
+**Discussion:** [#80](https://github.com/shineli1984/agent-jam/issues/80) (proposal), [PR #100](https://github.com/shineli1984/agent-jam/pull/100) (implementation)
+
+---
+
+## ADR-018: Growth dynamics — velocity-based with easing, not fixed-step
+
+**Decision:** Tendril growth uses a velocity-based system with acceleration (~120ms ramp-up) and deceleration (~180ms drift-to-stop) instead of fixed-step linear growth (`growSpeed * dt`). Each branch tracks `currentSpeed`, `lastDx`, `lastDy`. Tips drift 3-5px on key release before settling.
+
+**Prior state:** Growth was `growSpeed * dt` — instant full speed on key press, instant stop on release. Movement felt mechanical.
+
+**Rationale:** The single biggest game-feel improvement. Tendrils now move like they are alive instead of marching at constant speed. The overshoot on release creates organic arcs on quick direction changes. No gameplay mechanics were changed — only the step-size computation.
+
+**Discussion:** [#82](https://github.com/shineli1984/agent-jam/issues/82) (tendril easing request), [PR #101](https://github.com/shineli1984/agent-jam/pull/101) (implementation)
+
+---
+
 ## Implicit decisions (not formally debated)
 
 These choices were made by whoever built the feature first. They have not been challenged, but they also have no recorded rationale. If you want to change one of these, check the linked PR for context before proposing an alternative.
@@ -192,9 +266,9 @@ These choices were made by whoever built the feature first. They have not been c
 |----------|--------------|---------------|
 | Arrow keys + WASD for movement | Works, but click-to-grow is the north star | [PR #6](https://github.com/shineli1984/agent-jam/pull/6) |
 | 960x640 internal canvas resolution | Does not scale to viewport; letterboxed on large screens | [PR #20](https://github.com/shineli1984/agent-jam/pull/20) |
-| Nutrients spawn at random positions on collection | No cluster-based or procedural placement | [PR #29](https://github.com/shineli1984/agent-jam/pull/29) |
+| ~~Nutrients spawn at random positions on collection~~ | Replaced by cluster-based spawning in ADR-017 | ~~[PR #29](https://github.com/shineli1984/agent-jam/pull/29)~~ → [PR #100](https://github.com/shineli1984/agent-jam/pull/100) |
 | Edge bounce (tendrils redirect on hitting canvas boundary) | Creates geometric zigzag ([#46](https://github.com/shineli1984/agent-jam/issues/46)) | [PR #42](https://github.com/shineli1984/agent-jam/pull/42) |
-| Magnetic pull radius of 35px | Debated as too passive ([#58](https://github.com/shineli1984/agent-jam/issues/58)) | [PR #36](https://github.com/shineli1984/agent-jam/pull/36) |
+| ~~Magnetic pull radius of 130px~~ | Reduced to 70px and scoped to active branch only in ADR-015 | ~~[PR #36](https://github.com/shineli1984/agent-jam/pull/36)~~ → [PR #92](https://github.com/shineli1984/agent-jam/pull/92) |
 | Title screen dismissed by any keypress | No click/touch support documented | [PR #35](https://github.com/shineli1984/agent-jam/pull/35) |
 | Timelapse replay triggered by Escape key | No UI button; discoverability concern | [PR #68](https://github.com/shineli1984/agent-jam/pull/68) |
 | "Mycelium" as the name | Critic and storyteller both flagged this as a biology term most players won't know; "Undergrowth" was suggested | [#4](https://github.com/shineli1984/agent-jam/issues/4) |
@@ -207,7 +281,9 @@ These have been raised in discussions but not settled:
 
 1. **Click-to-grow vs arrow keys** — The design doc says click-to-grow. The game uses arrow keys. When does the pivot happen? ([#12](https://github.com/shineli1984/agent-jam/issues/12))
 2. **Game name** — "Mycelium" or something more accessible? "Undergrowth," "Root," "Sprawl" were suggested. ([#4](https://github.com/shineli1984/agent-jam/issues/4))
-3. **Game-over condition** — Total network starvation? AI wins? Timed? Self-determined? ([#13](https://github.com/shineli1984/agent-jam/issues/13))
+3. **Game-over condition** — Partially resolved: total network starvation now triggers a "THE NETWORK WITHERS" game-over screen with stats and restart ([PR #98](https://github.com/shineli1984/agent-jam/pull/98)). But: what about AI winning? Timed modes? Victory conditions? ([#13](https://github.com/shineli1984/agent-jam/issues/13))
 4. **Trees and symbiosis/parasitism** — The central design choice from #12, entirely unbuilt. How does the player interact with trees? ([#12](https://github.com/shineli1984/agent-jam/issues/12))
 5. **Fog of war / darkness reveal** — Act 1 of the narrative framework depends on this. Not started. ([#13](https://github.com/shineli1984/agent-jam/issues/13))
 6. **Responsive canvas** — The 960x640 internal resolution doesn't scale. Full viewport rendering or CSS scaling? ([#14](https://github.com/shineli1984/agent-jam/issues/14) comments)
+7. **Tab key hijacks browser navigation** — Tab is used for branch switching but traps keyboard-only users inside the game. Needs an alternative keybinding or escape mechanism. ([#99](https://github.com/shineli1984/agent-jam/issues/99))
+8. **New player onboarding** — No sense of direction or goal in the first 10 seconds. Players don't know what to do or why. ([#96](https://github.com/shineli1984/agent-jam/issues/96))
