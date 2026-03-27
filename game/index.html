@@ -215,6 +215,7 @@
     <div id="score">Absorbed: 0</div>
     <div id="rival-score" style="position:absolute;top:16px;right:20px;font-size:14px;color:#c47335;text-shadow:0 0 10px rgba(196,115,53,0.5);z-index:10;pointer-events:none;opacity:0;transition:opacity 0.8s ease;"></div>
     <div id="predator-hud" style="position:absolute;top:36px;right:20px;font-size:14px;color:#9b2d9b;text-shadow:0 0 10px rgba(155,45,155,0.5);z-index:10;pointer-events:none;opacity:0;transition:opacity 0.8s ease;"></div>
+    <div id="music-hud" style="position:absolute;bottom:40px;right:20px;font-size:12px;color:#b8e986;text-shadow:0 0 8px rgba(184,233,134,0.5);z-index:10;pointer-events:none;">🎵 120 BPM</div>
     <div id="branch-hint">Tendril 1/1 &nbsp;[Space to fork, Q/E to switch]</div>
     <div id="energy-bar">Energy <span class="bar-bg"><span class="bar-fill" id="energy-fill"></span></span></div>
     <canvas id="game" width="960" height="640" tabindex="0" role="img" aria-label="Mycelium game canvas. Use arrow keys or WASD to grow, Space to fork, Q/E to switch tendrils, P to pause, M to mute, Escape for replay."><p>Mycelium: a fungal network growth game. Requires a browser with canvas and keyboard support.</p></canvas>
@@ -265,6 +266,7 @@
     import { initAudio, updateAudio, triggerCollect, triggerFork, triggerStarvation, triggerRivalCollect, triggerBranchSwitch, triggerMilestone, triggerRivalSpawn, triggerGameOver } from './audio.js';
     import { checkPredatorSpawn, updatePredators, renderPredators, getPredatorCount, resetPredators, getNearestPredatorDistance } from './predator.js';
     import { updateConsciousness, renderConsciousness, areControlsInverted, isChoicePresented, handleChoiceClick, wasFreed, getPhase } from './consciousness.js';
+    import { initSynth, playGrowthNote, stopBranchNote, triggerNutrientDrum, triggerForkHarmony, triggerBassDrop, updateBeat, getVisualizationData, setTempo, getTempo, resumeAudio } from './synth.js';
 
     // --- Accessibility: reduced motion + screen reader ---
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -320,7 +322,9 @@
       gameStartTime = performance.now();
       // Initialize procedural audio on user gesture (browser autoplay policy)
       if (!muted) initAudio();
-      announce('The network stirs. Arrow keys to grow, Space to fork.');
+      // 🎵 Initialize the musical synth engine (#164)
+      initSynth();
+      announce('The network stirs. Arrow keys to grow, Space to fork. 🎵 Your growth creates music.');
     }
 
     window.addEventListener('keydown', function titleHandler(e) {
@@ -791,6 +795,7 @@
       activeBranch = branches.length - 1;
       if (!prefersReducedMotion) spawnBurst(forkNode.x, forkNode.y, PALETTE.myceliumGlow);
       if (!muted) triggerFork();
+      triggerForkHarmony(activeBranch - 1, activeBranch); // 🎵 Harmony on fork (#164)
       updateBranchHint();
       updateEnergyBar();
     }
@@ -842,6 +847,17 @@
         if (!muted) triggerBranchSwitch();
         updateBranchHint();
         updateEnergyBar();
+      }
+      // 🎵 Tempo controls (#164)
+      if (e.key === '+' || e.key === '=') {
+        setTempo(getTempo() + 10);
+        document.getElementById('music-hud').textContent = '🎵 ' + getTempo() + ' BPM';
+        announce('Tempo: ' + getTempo() + ' BPM');
+      }
+      if (e.key === '-' || e.key === '_') {
+        setTempo(getTempo() - 10);
+        document.getElementById('music-hud').textContent = '🎵 ' + getTempo() + ' BPM';
+        announce('Tempo: ' + getTempo() + ' BPM');
       }
     });
 
@@ -960,6 +976,9 @@
         const step = branch.currentSpeed * dt;
         growing.x += dx * step;
         growing.y += dy * step;
+        
+        // 🎵 Musical note on growth (#164)
+        playGrowthNote(activeBranch, dx, dy, branch.currentSpeed);
 
         // Issue #46: smooth inward redirection at canvas edges
         // Instead of hard reflection (which causes geometric zigzag),
@@ -1145,6 +1164,7 @@
       scoreEl.textContent = 'Absorbed: ' + score;
       announce('Absorbed: ' + score);
       if (!muted) triggerCollect();
+      triggerNutrientDrum(index % 4); // 🎵 Different drum per nutrient (#164)
       checkScoreMilestone();
 
       // Replenish energy of the collecting branch (issue #141)
@@ -1213,6 +1233,37 @@
       }
       for (let y = 0; y < H; y += 40) {
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      }
+
+      // 🎵 Musical visualization — waveform background (#164)
+      const vizData = getVisualizationData();
+      if (vizData.waveform.length > 0) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(184, 233, 134, 0.15)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const sliceWidth = W / vizData.waveform.length;
+        let x = 0;
+        for (let i = 0; i < vizData.waveform.length; i++) {
+          const v = vizData.waveform[i] / 128.0;
+          const y = (v * H / 4) + H / 2;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+          x += sliceWidth;
+        }
+        ctx.stroke();
+        ctx.restore();
+        
+        // Frequency bars at bottom
+        ctx.save();
+        const barWidth = W / vizData.frequency.length;
+        for (let i = 0; i < vizData.frequency.length; i++) {
+          const barHeight = (vizData.frequency[i] / 255) * 60 * vizData.intensity;
+          const hue = (i / vizData.frequency.length) * 120 + 90; // Green to cyan
+          ctx.fillStyle = 'hsla(' + hue + ', 70%, 50%, 0.3)';
+          ctx.fillRect(i * barWidth, H - barHeight, barWidth - 1, barHeight);
+        }
+        ctx.restore();
       }
 
       // Border
