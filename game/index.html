@@ -33,59 +33,44 @@
       position: absolute;
       top: 16px;
       left: 20px;
-      font-size: clamp(18px, 2.5vw, 24px);
+      font-size: 16px;
       color: #b8e986;
       text-shadow: 0 0 10px rgba(184, 233, 134, 0.5);
       z-index: 10;
       pointer-events: none;
-      letter-spacing: 1px;
     }
     #branch-hint {
       position: absolute;
-      top: 46px;
+      top: 40px;
       left: 20px;
-      font-size: clamp(11px, 1.4vw, 13px);
-      color: rgba(184, 233, 134, 0.55);
+      font-size: 13px;
+      color: rgba(184, 233, 134, 0.75);
       z-index: 10;
       pointer-events: none;
     }
     #energy-bar {
       position: absolute;
-      top: 68px;
+      top: 62px;
       left: 20px;
-      font-size: clamp(10px, 1.3vw, 12px);
-      color: rgba(184, 233, 134, 0.7);
+      font-size: 12px;
+      color: rgba(184, 233, 134, 0.8);
       z-index: 10;
       pointer-events: none;
-      display: flex;
-      align-items: center;
-      gap: 8px;
     }
     #energy-bar .bar-bg {
       display: inline-block;
-      width: clamp(100px, 15vw, 160px);
-      height: 10px;
+      width: 120px;
+      height: 8px;
       background: rgba(255,255,255,0.08);
-      border-radius: 5px;
+      border-radius: 4px;
       vertical-align: middle;
+      margin-left: 6px;
       overflow: hidden;
     }
     #energy-bar .bar-fill {
       height: 100%;
-      border-radius: 5px;
+      border-radius: 4px;
       transition: width 0.15s ease, background 0.3s ease;
-    }
-    #rival-score {
-      position: absolute;
-      top: 16px;
-      right: 20px;
-      font-size: clamp(12px, 1.6vw, 14px);
-      color: #c47335;
-      text-shadow: 0 0 10px rgba(196, 115, 53, 0.5);
-      z-index: 10;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.8s ease;
     }
     .controls {
       position: absolute;
@@ -93,13 +78,11 @@
       left: 0;
       right: 0;
       text-align: center;
-      font-size: clamp(10px, 1.3vw, 12px);
-      color: rgba(184, 233, 134, 0.5);
+      font-size: 12px;
+      color: rgba(184, 233, 134, 0.7);
       z-index: 10;
       pointer-events: none;
-      transition: opacity 2s ease;
     }
-    .controls.faded { opacity: 0; }
     /* --- Title Screen Overlay --- */
     #title-screen {
       position: absolute;
@@ -119,21 +102,21 @@
     }
     #title-screen h1 {
       font-family: monospace;
-      font-size: clamp(32px, 7vw, 56px);
-      letter-spacing: clamp(8px, 2vw, 18px);
+      font-size: 56px;
+      letter-spacing: 18px;
       color: #b8e986;
       text-shadow: 0 0 30px rgba(184, 233, 134, 0.6), 0 0 60px rgba(184, 233, 134, 0.2);
       margin-bottom: 16px;
       text-transform: uppercase;
     }
     #title-screen .tagline {
-      font-size: clamp(12px, 1.8vw, 15px);
+      font-size: 15px;
       color: rgba(184, 233, 134, 0.75);
-      letter-spacing: clamp(2px, 0.5vw, 4px);
+      letter-spacing: 4px;
       margin-bottom: 48px;
     }
     #title-screen .prompt {
-      font-size: clamp(11px, 1.5vw, 13px);
+      font-size: 13px;
       color: rgba(184, 233, 134, 0.4);
       letter-spacing: 3px;
       animation: pulse-prompt 2s ease-in-out infinite;
@@ -159,7 +142,7 @@
     }
     #pause-overlay.visible { display: flex; }
     #pause-overlay span {
-      font-size: clamp(22px, 4vw, 32px);
+      font-size: 32px;
       color: #b8e986;
       letter-spacing: 8px;
       text-shadow: 0 0 20px rgba(184, 233, 134, 0.5);
@@ -187,55 +170,38 @@
     #game-over-overlay.visible { display: flex; }
     #game-over-overlay h2 {
       font-family: monospace;
-      font-size: clamp(22px, 3.5vw, 32px);
+      font-size: 28px;
       color: #7b2d8e;
       text-shadow: 0 0 20px rgba(123, 45, 142, 0.5);
       letter-spacing: 6px;
-      margin-bottom: 20px;
+      margin-bottom: 12px;
     }
     #game-over-overlay .stats {
-      font-size: clamp(13px, 1.8vw, 16px);
+      font-size: 14px;
       color: rgba(184, 233, 134, 0.8);
-      margin-bottom: 4px;
-      text-align: center;
-      line-height: 1.8;
-    }
-    #game-over-overlay .stat-highlight {
-      color: #f4d35e;
-      font-size: clamp(20px, 2.8vw, 28px);
-      text-shadow: 0 0 12px rgba(244, 211, 94, 0.4);
-      display: block;
       margin-bottom: 8px;
     }
     #game-over-overlay .restart-hint {
-      font-size: clamp(11px, 1.4vw, 13px);
-      color: rgba(184, 233, 134, 0.4);
+      font-size: 13px;
+      color: rgba(184, 233, 134, 0.5);
       letter-spacing: 3px;
-      margin-top: 24px;
-      animation: pulse-prompt 2s ease-in-out infinite;
+      margin-top: 16px;
     }
     #fork-feedback {
       position: absolute;
-      z-index: 20;
-      font-size: clamp(12px, 1.5vw, 14px);
+      z-index: 10;
+      font-size: 11px;
       font-family: monospace;
-      color: #f4d35e;
-      text-shadow: 0 0 8px rgba(244, 211, 94, 0.6), 0 0 2px rgba(0, 0, 0, 0.8);
+      color: rgba(123, 45, 142, 0.9);
+      text-shadow: 0 0 6px rgba(123, 45, 142, 0.4);
       pointer-events: none;
       opacity: 0;
-      transition: opacity 0.2s ease;
-      letter-spacing: 1px;
-      background: rgba(10, 14, 15, 0.6);
-      padding: 4px 10px;
-      border-radius: 4px;
-      border-left: 2px solid rgba(244, 211, 94, 0.4);
+      transition: opacity 0.15s ease;
     }
     #fork-feedback.visible { opacity: 1; }
     @media (prefers-reduced-motion: reduce) {
       #fork-feedback { transition: none; }
       #game-over-overlay { transition: none; }
-      .controls { transition: none; }
-      #game-over-overlay .restart-hint { animation: none; opacity: 0.8; }
     }
   </style>
 </head>
@@ -247,10 +213,10 @@
       <div class="prompt">press any key</div>
     </div>
     <div id="score">Absorbed: 0</div>
-    <div id="rival-score"></div>
-    <div id="branch-hint">Tendril 1/1</div>
+    <div id="rival-score" style="position:absolute;top:16px;right:20px;font-size:14px;color:#c47335;text-shadow:0 0 10px rgba(196,115,53,0.5);z-index:10;pointer-events:none;opacity:0;transition:opacity 0.8s ease;"></div>
+    <div id="branch-hint">Tendril 1/1 &nbsp;[Space to fork, Q/E to switch]</div>
     <div id="energy-bar">Energy <span class="bar-bg"><span class="bar-fill" id="energy-fill"></span></span></div>
-    <canvas id="game" width="960" height="640" tabindex="0" role="img" aria-label="Mycelium game canvas. Use arrow keys or WASD to grow, Space to fork, Tab to switch tendrils, P to pause, M to mute, Escape for replay."><p>Mycelium: a fungal network growth game. Requires a browser with canvas and keyboard support.</p></canvas>
+    <canvas id="game" width="960" height="640" tabindex="0" role="img" aria-label="Mycelium game canvas. Use arrow keys or WASD to grow, Space to fork, Q/E to switch tendrils, P to pause, M to mute, Escape for replay."><p>Mycelium: a fungal network growth game. Requires a browser with canvas and keyboard support.</p></canvas>
     <div id="pause-overlay"><span>PAUSED</span></div>
     <div id="game-over-overlay" role="alert">
       <h2>THE NETWORK WITHERS</h2>
@@ -259,7 +225,7 @@
     </div>
     <div id="fork-feedback" aria-hidden="true"></div>
     <div id="sr-announcements" aria-live="polite" aria-atomic="false"></div>
-    <div class="controls">Reach &mdash; arrow keys / WASD &nbsp;&middot;&nbsp; Fork &mdash; space / click &nbsp;&middot;&nbsp; Switch tendril &mdash; tab &nbsp;&middot;&nbsp; Pause &mdash; P &nbsp;&middot;&nbsp; Mute &mdash; M</div>
+    <div class="controls">Reach &mdash; arrow keys / WASD &nbsp;&middot;&nbsp; Fork &mdash; space / click &nbsp;&middot;&nbsp; Switch tendril &mdash; Q/E &nbsp;&middot;&nbsp; Pause &mdash; P &nbsp;&middot;&nbsp; Mute &mdash; M</div>
   </div>
 
   <script type="module">
@@ -352,16 +318,10 @@
       // Initialize procedural audio on user gesture (browser autoplay policy)
       if (!muted) initAudio();
       announce('The network stirs. Arrow keys to grow, Space to fork.');
-      // Fade out controls hint after 8 seconds — player should know the keys by then
-      const controlsEl = document.querySelector('.controls');
-      if (controlsEl) {
-        setTimeout(() => { controlsEl.classList.add('faded'); }, 8000);
-      }
     }
 
     window.addEventListener('keydown', function titleHandler(e) {
-      // Exclude Escape from "press any key" — it's universally "cancel/back", not "start" (#136)
-      if (!gameStarted && e.key !== 'Escape') {
+      if (!gameStarted) {
         e.preventDefault();
         dismissTitle();
       }
@@ -706,61 +666,6 @@
       }
     }
 
-    // --- Segment ripple — secondary motion (issue #83) ---
-    // When a tip advances far enough to commit a new segment, a wobble impulse
-    // propagates backward through the 3-4 nearest segments on the same branch.
-    // Each segment's wobble oscillates via a damped spring and settles back to
-    // its rest position within ~300ms. Forks inject a stronger impulse.
-    // Purely visual — no gameplay impact.
-
-    /**
-     * Inject a ripple impulse into segments near a branch tip.
-     * @param {number} branchIndex — the branch that just grew or forked
-     * @param {number} impulse — initial wobbleVelocity magnitude
-     */
-    function injectSegmentRipple(branchIndex, impulse) {
-      if (prefersReducedMotion) return;
-      const depth = CONFIG.fx.rippleDepth;
-      const decay = CONFIG.fx.rippleDecay;
-      // Walk backward through segments belonging to this branch, newest first
-      let count = 0;
-      for (let i = network.segments.length - 1; i >= 0 && count < depth; i--) {
-        const seg = network.segments[i];
-        if (seg.branch !== branchIndex) continue;
-        // Initialize spring properties if missing
-        if (seg.restWobble === undefined) {
-          seg.restWobble = seg.wobble;
-          seg.wobbleVelocity = 0;
-        }
-        // Impulse decays with distance from the tip
-        const factor = Math.pow(1 - decay, count);
-        seg.wobbleVelocity += impulse * factor * (Math.random() > 0.5 ? 1 : -1);
-        count++;
-      }
-    }
-
-    /**
-     * Update damped-spring wobble on all segments that have active velocity.
-     * Called once per frame from the game loop.
-     * Spring equation: a = -stiffness * displacement - damping * velocity
-     */
-    function updateSegmentRipples(dt) {
-      const stiffness = CONFIG.fx.rippleStiffness;
-      const damping = CONFIG.fx.rippleDamping;
-      for (const seg of network.segments) {
-        if (seg.wobbleVelocity === undefined || seg.wobbleVelocity === 0) continue;
-        const displacement = seg.wobble - seg.restWobble;
-        const accel = -stiffness * displacement - damping * seg.wobbleVelocity;
-        seg.wobbleVelocity += accel * dt;
-        seg.wobble += seg.wobbleVelocity * dt;
-        // Kill tiny oscillations to avoid infinite micro-updates
-        if (Math.abs(seg.wobbleVelocity) < 0.5 && Math.abs(displacement) < 0.2) {
-          seg.wobble = seg.restWobble;
-          seg.wobbleVelocity = 0;
-        }
-      }
-    }
-
     // --- Nutrient absorption animation (squash-and-pop) ---
     const absorptionAnims = []; // {x, y, age, duration, color}
 
@@ -861,13 +766,10 @@
         const newNode = { x: current.growing.x, y: current.growing.y, radius: NODE_RADIUS };
         network.nodes.push(newNode);
         const newIndex = network.nodes.length - 1;
-        const forkSegWobble = genWobble(current.growing.dist);
-        network.segments.push({ from: current.tipIndex, to: newIndex, wobble: forkSegWobble, restWobble: forkSegWobble, wobbleVelocity: 0, branch: activeBranch });
+        network.segments.push({ from: current.tipIndex, to: newIndex, wobble: genWobble(current.growing.dist), branch: activeBranch });
         current.tipIndex = newIndex;
         current.growing.dist = 0;
       }
-      // Fork ripple: stronger impulse propagates backward through parent branch (#83)
-      injectSegmentRipple(activeBranch, CONFIG.fx.rippleForkImpulse);
       const forkTip = current.tipIndex;
       const forkNode = network.nodes[forkTip];
       const childEnergy = current.energy * 0.5;
@@ -891,7 +793,7 @@
     }
 
     function updateBranchHint() {
-      branchHintEl.textContent = 'Tendril ' + (activeBranch + 1) + '/' + branches.length;
+      branchHintEl.textContent = 'Tendril ' + (activeBranch + 1) + '/' + branches.length + '  [Space to fork, Q/E to switch]';
     }
 
     // --- Input ---
@@ -925,9 +827,15 @@
       if (paused) return;
       if (gameOver) return;
       if (e.key === ' ') createBranch();
-      if (e.key === 'Tab' && branches.length > 1) {
-        e.preventDefault();
+      // Q/E for tendril switching — avoids hijacking browser Tab navigation (#99)
+      if ((e.key === 'e' || e.key === 'E') && branches.length > 1) {
         activeBranch = (activeBranch + 1) % branches.length;
+        if (!muted) triggerBranchSwitch();
+        updateBranchHint();
+        updateEnergyBar();
+      }
+      if ((e.key === 'q' || e.key === 'Q') && branches.length > 1) {
+        activeBranch = (activeBranch - 1 + branches.length) % branches.length;
         if (!muted) triggerBranchSwitch();
         updateBranchHint();
         updateEnergyBar();
@@ -946,7 +854,7 @@
         if (!muted) triggerGameOver();
         const elapsed = ((performance.now() - gameStartTime) / 1000).toFixed(0);
         const statsText = 'Absorbed: ' + score + '  |  Tendrils: ' + branches.length + '  |  ' + elapsed + 's survived';
-        gameOverStats.innerHTML = '<span class="stat-highlight">' + score + ' absorbed</span>' + branches.length + ' tendrils &middot; ' + elapsed + 's survived';
+        gameOverStats.textContent = statsText;
         gameOverOverlay.classList.add('visible');
         announce('All tendrils have withered. ' + statsText + '. Press R to restart.');
       }
@@ -1066,10 +974,7 @@
           const newNode = { x: growing.x, y: growing.y, radius: NODE_RADIUS };
           network.nodes.push(newNode);
           const newIndex = network.nodes.length - 1;
-          const segWobble = genWobble(growing.dist);
-          network.segments.push({ from: tipIndex, to: newIndex, wobble: segWobble, restWobble: segWobble, wobbleVelocity: 0, branch: activeBranch });
-          // Ripple: new segment sends a wobble impulse backward (#83)
-          injectSegmentRipple(activeBranch, CONFIG.fx.rippleImpulse);
+          network.segments.push({ from: tipIndex, to: newIndex, wobble: genWobble(growing.dist), branch: activeBranch });
           tipIndex = newIndex;
           branch.tipIndex = newIndex;
           branch.wobble = genWobble(growing.dist);
@@ -1083,7 +988,6 @@
       updateEnergyBar();
       tweens.update(dt);
       updateForkRipples(dt);
-      updateSegmentRipples(dt); // issue #83: secondary motion on segments
       updateAbsorptionAnims(dt);
 
       // --- Magnetic nutrient pull — active branch only (issue #90) ---
@@ -1627,7 +1531,5 @@
     }
     requestAnimationFrame(gameLoop);
   </script>
-  <!-- Debug panel: toggled by ~ key, lazy-initialized (issue #121) -->
-  <script src="debug-panel.js"></script>
 </body>
 </html>
