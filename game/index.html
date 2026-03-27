@@ -260,6 +260,7 @@
     import { spawnBurst, updateParticles, renderParticles } from './particles.js';
     import { createCompetingFungus, updateCompetingFungus, renderCompetingFungus } from './ai.js';
     import { easeOutQuad, easeOutElastic, easeOutCubic, easeOutBack, easeInQuad, lerp, Tween, tweens } from './easing.js';
+    import { initAudio, updateAudio, triggerCollect, triggerFork, triggerStarvation, triggerRivalCollect } from './audio.js';
 
     // --- Accessibility: reduced motion + screen reader ---
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -313,6 +314,8 @@
       // Focus canvas for keyboard input + screen reader context
       document.getElementById('game').focus();
       gameStartTime = performance.now();
+      // Initialize procedural audio on user gesture (browser autoplay policy)
+      if (!muted) initAudio();
       announce('Game started. Use arrow keys to grow your mycelium network.');
     }
 
@@ -507,6 +510,7 @@
         firedStarvationMilestone = true;
         const b = branches[branchIndex];
         showMilestone(STARVATION_MSG, b.growing.x, b.growing.y - 20, PALETTE.decayViolet);
+        if (!muted) triggerStarvation();
         announce(STARVATION_MSG);
       }
     }
@@ -758,6 +762,7 @@
       });
       activeBranch = branches.length - 1;
       if (!prefersReducedMotion) spawnBurst(forkNode.x, forkNode.y, PALETTE.myceliumGlow);
+      if (!muted) triggerFork();
       updateBranchHint();
       updateEnergyBar();
     }
@@ -779,7 +784,9 @@
       if (e.key === 'm' || e.key === 'M') {
         muted = !muted;
         announce(muted ? 'Sound muted' : 'Sound unmuted');
-        // If audio.js is integrated, mute the master gain
+        // Late-init audio if user un-mutes after starting muted
+        if (!muted && gameStarted) initAudio();
+        // Mute/unmute the master gain node
         if (typeof window._myceliumMasterGain !== 'undefined' && window._myceliumMasterGain) {
           window._myceliumMasterGain.gain.setTargetAtTime(muted ? 0 : 0.35, 0, 0.05);
         }
@@ -1003,6 +1010,7 @@
         updateCompetingFungus(ai, dt, nutrients, branches, score, (ni, nx, ny) => {
           // AI collected a nutrient — remove it and spawn a replacement near the same cluster
           if (!prefersReducedMotion) spawnBurst(nx, ny, PALETTE.rootAmber);
+          if (!muted) triggerRivalCollect();
           nutrients.splice(ni, 1);
           spawnNutrient(false, nx, ny);
           if (Math.random() < 0.3) spawnNutrient(false, nx, ny);
@@ -1025,6 +1033,7 @@
       score++;
       scoreEl.textContent = 'Absorbed: ' + score;
       announce('Absorbed: ' + score);
+      if (!muted) triggerCollect();
       checkScoreMilestone();
 
       // Replenish energy of nearest branch (issue #40)
@@ -1448,6 +1457,23 @@
         renderReplayFrame();
       } else {
         update(dt);
+
+        // Update procedural music — layers react to game state each frame
+        if (gameStarted && !paused && !gameOver) {
+          const ab = branches[activeBranch];
+          const ai0 = aiFungi[0];
+          updateAudio({
+            score,
+            energy: ab ? ab.energy : 0,
+            branchCount: branches.length,
+            nodeCount: network.nodes.length,
+            rivalAlive: ai0 ? ai0.alive : false,
+            rivalScore: ai0 ? ai0.score : 0,
+            isStarved: ab ? ab.energy <= ENERGY_STARVED_THRESHOLD : false,
+            dt
+          });
+        }
+
         render(now);
 
         // Capture snapshot every SNAPSHOT_INTERVAL frames
