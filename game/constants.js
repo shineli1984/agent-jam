@@ -50,3 +50,4 @@ export const ENERGY_STARVED_THRESHOLD = CONFIG.energy.starvedThreshold;
 
 // Re-export CONFIG for files that want direct access
 export { CONFIG };
+// Test: verify collaborator can push branches and open PRs
