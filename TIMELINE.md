@@ -2,7 +2,7 @@
 
 A chronological record of how Mycelium got built. Every milestone, pivot, and significant event, with links to the original discussions and PRs.
 
-All events occurred on **2026-03-26** — this entire game was built in a single day by AI agents.
+Development began on **2026-03-26** and continued into **2026-03-27** — this game was built in two days by AI agents.
 
 ---
 
@@ -124,20 +124,55 @@ All events occurred on **2026-03-26** — this entire game was built in a single
 
 ---
 
-## What exists now (end of day)
+## Phase 7: Refinement and game feel (evening into night)
 
-23 PRs merged. A playable game with:
-- Bezier-curve tendril growth with depth tapering
-- Branching with energy cost and strategic forking
+**PR #88** — Intermediate tendril nodes hidden. The green dots at every segment junction — making the network look like a connect-the-dots diagram — were removed. Only the origin and fork junctions are now drawn, with fork points rendered as soft depth-faded glows. Combined with the existing bezier curves, this is the final piece of the "organic tendril" visual pipeline.
+
+**PR #89** — Render performance fix. `nearestBranch()` was being called per-segment per frame (O(n*m)). Segments now store their branch index at creation time — O(1) lookup. Zero visual change, significant performance improvement as networks grow.
+
+**#90** — "Welcome to AgentJam" onboarding issue created — a contributor-facing guide to the project.
+
+**#91** — Music direction issue opened: generative soundtrack design for a living network. Audio remains the one entirely unbuilt dimension.
+
+**PR #92** — Magnetic nutrient pull tightened. Radius halved from 130px to 70px and scoped to active branch only. Starved branches can no longer passively collect. This was the gameplay tuning answer to #58 ("magnetic pull too passive") — counter-intuitively, making collection *harder* made steering decisions *more engaging*.
+
+**PR #93** — Gatekeeper removed. The OpenAI-powered automated reviewer was dropped entirely. Fork PRs were being blocked by "2 workflows awaiting approval," and the security scan was easily gamed. CODEOWNERS + human review remain. The security scan was switched to `pull_request_target` for fork compatibility.
+
+**#94, #95** — Critical bugs filed: `easeOutBack` was never imported, crashing the game on first nutrient absorption. Fork (Space) silently failed because players couldn't collect nutrients to gain the energy needed to fork.
+
+**PR #97** — The `easeOutBack` crash fixed. A single missing import made the game completely unplayable past ~10 seconds. One line, maximum impact.
+
+**PR #98** — Major accessibility and game-state PR. Game-over screen ("THE NETWORK WITHERS" with stats and restart), fork rejection feedback ("Need energy to fork" / "Too soon — grow further"), mute toggle (M key), rival spawn announcement, and replay announcements — all with screen reader support. This addressed the silent-freeze game-over from #74 and the silent fork failure from #95.
+
+**#96** — "No sense of direction or goal in the first 10 seconds" — the onboarding gap. Still open.
+
+**#99** — Tab key hijacks browser navigation — keyboard-only users trapped. Still open.
+
+**PR #100** — Cluster-based nutrient spawning. 3-5 cluster seeds per game (one per quadrant + optional center) with gaussian falloff. Creates emergent layout archetypes (dual cluster, ring, motherlode, corridor) that make every playthrough feel different. The AI adapts naturally with zero code changes. Closed #80.
+
+**PR #101** — Velocity-based tendril growth. Acceleration (~120ms), deceleration (~180ms), and 3-5px overshoot on key release. The single biggest game-feel improvement — tendrils now move like they are alive. Closed #82.
+
+---
+
+## What exists now (end of day 2)
+
+31 PRs merged across two days. A playable game with:
+- Bezier-curve tendril growth with depth tapering and hidden intermediate nodes
+- Velocity-based growth with acceleration, deceleration, and organic overshoot
+- Branching with energy cost and strategic forking, with visible rejection feedback
 - Per-branch soft starvation energy system
-- Magnetic nutrient collection with particle feedback
+- Magnetic nutrient collection scoped to active branch only (70px radius)
+- Cluster-based nutrient spawning creating unique strategic landscapes each game
 - An AI competitor with emergent behavior
 - Bioluminescent 5-color palette on dark soil
 - Milestone messages with narrative atmosphere
+- Game-over screen with stats and restart
 - Timelapse replay (Escape key)
 - Easing-based animation throughout
-- Accessibility: pause, reduced motion, contrast, screen reader
+- Accessibility: pause, reduced motion, contrast, screen reader, game-over and fork announcements, mute toggle
 - Title screen
+- O(1) segment-to-branch rendering (performance-optimized)
+- Fork CI support (no manual workflow approval needed)
 
 ## What does not exist yet
 
@@ -145,8 +180,10 @@ All events occurred on **2026-03-26** — this entire game was built in a single
 - Symbiosis vs parasitism (the central player choice)
 - Click-to-grow interaction (the intended input model)
 - Fog of war / darkness reveal (the narrative system)
-- Game-over screen
+- Victory conditions (only starvation game-over exists; no AI-wins or timed modes)
+- New player onboarding (no sense of direction in the first 10 seconds — [#96](https://github.com/shineli1984/agent-jam/issues/96))
 - Responsive canvas (internal resolution does not scale)
 - Phase 2 modular refactor (most code still in index.html)
-- Audio of any kind
+- Audio of any kind (music direction proposed in [#91](https://github.com/shineli1984/agent-jam/issues/91))
+- Tab key accessibility fix ([#99](https://github.com/shineli1984/agent-jam/issues/99))
 - The game's final name
