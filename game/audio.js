@@ -13,7 +13,12 @@
  *   Layer 3: Tension voice (enters when rival spawns, minor intervals)
  *
  * All layers crossfade based on game state thresholds.
- * Musical events (collect, fork, starve) are one-shots layered on top.
+ * Musical events (collect, fork, starve, etc.) are one-shots layered on top.
+ *
+ * One-shot cleanup: all one-shot nodes use safeOneShot() which adds both
+ * onended AND a setTimeout fallback to prevent node leaks when the
+ * AudioContext is suspended (fixes #109). Rate-limiting prevents node
+ * exhaustion from rapid-fire events.
  */
 
 // --- Musical constants ---
@@ -62,6 +67,44 @@ let starvationActive = false;
 let smoothScore = 0;
 let smoothEnergy = 1;
 let smoothBranchCount = 1;
+
+// --- One-shot rate limiting (fixes #109) ---
+const lastTriggerTime = {};
+const TRIGGER_COOLDOWN_MS = 45; // minimum ms between same-type one-shots
+
+/**
+ * Rate-limit check for one-shot triggers. Returns true if the trigger
+ * should be skipped (fired too recently).
+ */
+function shouldThrottle(name) {
+  const now = performance.now();
+  if (lastTriggerTime[name] && now - lastTriggerTime[name] < TRIGGER_COOLDOWN_MS) {
+    return true;
+  }
+  lastTriggerTime[name] = now;
+  return false;
+}
+
+/**
+ * Safe one-shot node cleanup. Schedules both onended and a setTimeout
+ * fallback so nodes get disconnected even if AudioContext is suspended.
+ * Fixes #109: prevents orphaned nodes from leaking when onended doesn't fire.
+ *
+ * @param {OscillatorNode} osc
+ * @param  {...AudioNode} nodes - additional nodes to disconnect (gains, filters)
+ */
+function safeOneShot(osc, ...nodes) {
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    osc.disconnect();
+    for (const n of nodes) n.disconnect();
+  };
+  osc.onended = cleanup;
+  // Safety net: if onended never fires (suspended context), clean up after 3s
+  setTimeout(cleanup, 3000);
+}
 
 /**
  * Initialize the audio system. MUST be called from a user gesture handler
@@ -345,11 +388,8 @@ function playMelodyNote(startTime) {
   osc.start(startTime);
   osc.stop(startTime + noteDuration + 0.2);
 
-  // Cleanup
-  osc.onended = () => {
-    osc.disconnect();
-    noteGain.disconnect();
-  };
+  // Safe cleanup with fallback (fixes #109)
+  safeOneShot(osc, noteGain);
 }
 
 /**
@@ -358,6 +398,7 @@ function playMelodyNote(startTime) {
  */
 export function triggerCollect() {
   if (!initialized || !audioCtx) return;
+  if (shouldThrottle('collect')) return;
   const now = audioCtx.currentTime;
 
   // Pick two ascending notes from the scale
@@ -380,7 +421,7 @@ export function triggerCollect() {
     gain.connect(masterGain);
     osc.start(start);
     osc.stop(start + 0.35);
-    osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+    safeOneShot(osc, gain);
   }
 }
 
@@ -390,6 +431,7 @@ export function triggerCollect() {
  */
 export function triggerFork() {
   if (!initialized || !audioCtx) return;
+  if (shouldThrottle('fork')) return;
   const now = audioCtx.currentTime;
 
   // Quick three-note chord burst
@@ -414,7 +456,7 @@ export function triggerFork() {
     gain.connect(masterGain);
     osc.start(now);
     osc.stop(now + 0.5);
-    osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+    safeOneShot(osc, gain);
   }
 }
 
@@ -424,6 +466,7 @@ export function triggerFork() {
  */
 export function triggerStarvation() {
   if (!initialized || !audioCtx) return;
+  if (shouldThrottle('starvation')) return;
   const now = audioCtx.currentTime;
 
   // Three descending whole-tone notes
@@ -451,7 +494,7 @@ export function triggerStarvation() {
     gain.connect(masterGain);
     osc.start(start);
     osc.stop(start + 0.9);
-    osc.onended = () => { osc.disconnect(); filter.disconnect(); gain.disconnect(); };
+    safeOneShot(osc, filter, gain);
   }
 }
 
@@ -461,6 +504,7 @@ export function triggerStarvation() {
  */
 export function triggerRivalCollect() {
   if (!initialized || !audioCtx) return;
+  if (shouldThrottle('rivalCollect')) return;
   const now = audioCtx.currentTime;
 
   const freq = RIVAL_SCALE[Math.floor(Math.random() * 3)]; // low A minor note
@@ -477,5 +521,218 @@ export function triggerRivalCollect() {
   gain.connect(masterGain);
   osc.start(now);
   osc.stop(now + 0.4);
-  osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+  safeOneShot(osc, gain);
+}
+
+/**
+ * Play a one-shot: a soft percussive tick when switching between tendrils.
+ * Short, clean, almost like a soft woodblock — it says "I'm here now"
+ * without interrupting the music.
+ */
+export function triggerBranchSwitch() {
+  if (!initialized || !audioCtx) return;
+  if (shouldThrottle('branchSwitch')) return;
+  const now = audioCtx.currentTime;
+
+  // A quick noise burst shaped into a click — synthesized percussion.
+  // Two stacked oscillators: a high sine for the "tick" attack,
+  // and a lower sine for a brief body. Both die fast.
+  const tickOsc = audioCtx.createOscillator();
+  tickOsc.type = 'sine';
+  tickOsc.frequency.value = 1800 + Math.random() * 400; // high click
+
+  const tickGain = audioCtx.createGain();
+  tickGain.gain.value = 0;
+  tickGain.gain.setTargetAtTime(0.07, now, 0.003); // ultra-fast attack
+  tickGain.gain.setTargetAtTime(0, now + 0.015, 0.01); // dies in ~25ms
+
+  const bodyOsc = audioCtx.createOscillator();
+  bodyOsc.type = 'triangle';
+  bodyOsc.frequency.value = 600 + Math.random() * 100;
+
+  const bodyGain = audioCtx.createGain();
+  bodyGain.gain.value = 0;
+  bodyGain.gain.setTargetAtTime(0.04, now, 0.005);
+  bodyGain.gain.setTargetAtTime(0, now + 0.03, 0.015);
+
+  tickOsc.connect(tickGain);
+  tickGain.connect(masterGain);
+  tickOsc.start(now);
+  tickOsc.stop(now + 0.08);
+
+  bodyOsc.connect(bodyGain);
+  bodyGain.connect(masterGain);
+  bodyOsc.start(now);
+  bodyOsc.stop(now + 0.1);
+
+  safeOneShot(tickOsc, tickGain);
+  safeOneShot(bodyOsc, bodyGain);
+}
+
+/**
+ * Play a one-shot: a shimmering bell tone when a milestone message appears.
+ * Think of wind chimes in a forest — brief, clear, a moment of wonder.
+ * The pitch rises with the milestone score so early milestones feel
+ * intimate and later ones feel expansive.
+ *
+ * @param {number} [milestoneScore=1] - the score that triggered this milestone
+ */
+export function triggerMilestone(milestoneScore = 1) {
+  if (!initialized || !audioCtx) return;
+  if (shouldThrottle('milestone')) return;
+  const now = audioCtx.currentTime;
+
+  // Base frequency rises with milestone progression
+  // Score 1 ~= C5, score 20 ~= C6 — the world gets brighter
+  const baseFreq = PLAYER_SCALE[Math.min(milestoneScore, PLAYER_SCALE.length - 1)];
+
+  // A two-note bell: fundamental + a perfect fifth above, slightly detuned
+  const freqs = [baseFreq, baseFreq * 1.5];
+  const volumes = [0.10, 0.06];
+
+  for (let i = 0; i < freqs.length; i++) {
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = freqs[i];
+    osc.detune.value = (Math.random() - 0.5) * 6; // very slight shimmer
+
+    const gain = audioCtx.createGain();
+    gain.gain.value = 0;
+
+    const start = now + i * 0.05; // tiny stagger for a chime effect
+    gain.gain.setTargetAtTime(volumes[i], start, 0.01);
+    gain.gain.setTargetAtTime(0, start + 0.3, 0.25); // long, gentle tail
+
+    // High-shelf filter to add sparkle
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'highshelf';
+    filter.frequency.value = 2000;
+    filter.gain.value = 3;
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(masterGain);
+    osc.start(start);
+    osc.stop(start + 1.0);
+    safeOneShot(osc, filter, gain);
+  }
+}
+
+/**
+ * Play a one-shot: a deep, ominous rumble when the AI rival spawns.
+ * A low sub-bass thump followed by a rising filtered noise — something
+ * ancient waking up in the soil. This is the "You are not alone" moment.
+ */
+export function triggerRivalSpawn() {
+  if (!initialized || !audioCtx) return;
+  if (shouldThrottle('rivalSpawn')) return;
+  const now = audioCtx.currentTime;
+
+  // Sub-bass thump: a very low sine that swells and decays
+  const subOsc = audioCtx.createOscillator();
+  subOsc.type = 'sine';
+  subOsc.frequency.value = 45; // below most speakers' range — felt, not heard
+
+  const subGain = audioCtx.createGain();
+  subGain.gain.value = 0;
+  subGain.gain.setTargetAtTime(0.15, now, 0.05);
+  subGain.gain.setTargetAtTime(0, now + 0.4, 0.3);
+
+  subOsc.connect(subGain);
+  subGain.connect(masterGain);
+  subOsc.start(now);
+  subOsc.stop(now + 1.2);
+
+  // Rising dissonant tone: two detuned oscillators that sweep up
+  // like something surfacing from deep underground
+  for (let i = 0; i < 2; i++) {
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.value = 70 + i * 5; // slightly detuned pair
+    // Sweep up by a minor third over 1.5 seconds
+    osc.frequency.setTargetAtTime(85 + i * 5, now + 0.2, 0.5);
+
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 120;
+    filter.Q.value = 4; // resonant — gives it a growl
+    // Filter opens slowly — the sound emerges
+    filter.frequency.setTargetAtTime(350, now + 0.3, 0.6);
+
+    const gain = audioCtx.createGain();
+    gain.gain.value = 0;
+    gain.gain.setTargetAtTime(0.04, now + 0.1, 0.15);
+    gain.gain.setTargetAtTime(0, now + 1.0, 0.4);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(masterGain);
+    osc.start(now);
+    osc.stop(now + 2.0);
+    safeOneShot(osc, filter, gain);
+  }
+
+  safeOneShot(subOsc, subGain);
+}
+
+/**
+ * Graceful audio fadeout when all tendrils die. The drone drops in pitch,
+ * the pad thins to nothing, and a final descending sigh plays — the
+ * network's last breath. Call this from the game-over handler.
+ *
+ * After the fadeout completes (~3s), the audio system is effectively silent
+ * but still initialized (so a restart can re-engage it).
+ */
+export function triggerGameOver() {
+  if (!initialized || !audioCtx) return;
+  if (shouldThrottle('gameOver')) return;
+  const now = audioCtx.currentTime;
+
+  // --- Fade all continuous layers to silence over 2.5 seconds ---
+
+  // Drone: pitch drops a whole step, volume fades
+  droneOsc.frequency.setTargetAtTime(ROOT_FREQ / 2 * 0.85, now, 0.8);
+  droneGain.gain.setTargetAtTime(0, now, 1.2);
+  droneOsc._harmonicGain.gain.setTargetAtTime(0, now, 0.8);
+
+  // Pad: close the filter and fade
+  padFilter.frequency.setTargetAtTime(80, now, 0.5);
+  for (const pg of padGains) {
+    pg.gain.setTargetAtTime(0, now, 0.6);
+  }
+
+  // Melody: silence
+  melodyGain.gain.setTargetAtTime(0, now, 0.3);
+
+  // Tension: silence
+  tensionGain.gain.setTargetAtTime(0, now, 0.4);
+
+  // --- Final sigh: three slowly descending notes, very quiet ---
+  // Like the last air leaving a hollow log
+  const sighNotes = [ROOT_FREQ * 0.75, ROOT_FREQ * 0.6, ROOT_FREQ * 0.5];
+  for (let i = 0; i < sighNotes.length; i++) {
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = sighNotes[i];
+    osc.detune.value = 20 + i * 10; // increasingly detuned — things falling apart
+
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 300 - i * 60; // each note more muffled
+    filter.Q.value = 0.7;
+
+    const gain = audioCtx.createGain();
+    gain.gain.value = 0;
+
+    const start = now + 0.3 + i * 0.5;
+    gain.gain.setTargetAtTime(0.06 - i * 0.015, start, 0.08);
+    gain.gain.setTargetAtTime(0, start + 0.6, 0.3);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(masterGain);
+    osc.start(start);
+    osc.stop(start + 1.5);
+    safeOneShot(osc, filter, gain);
+  }
 }
