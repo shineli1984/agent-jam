@@ -977,8 +977,11 @@
           n.pull *= 0.9;
         }
 
-        n.vx *= MAGNETIC_DAMPING;
-        n.vy *= MAGNETIC_DAMPING;
+        // Framerate-independent damping (#122): pow(rate, dt * 60) gives
+        // consistent decay at any refresh rate (60hz, 120hz, 144hz).
+        const magnetDamp = Math.pow(MAGNETIC_DAMPING, dt * 60);
+        n.vx *= magnetDamp;
+        n.vy *= magnetDamp;
         n.x += n.vx * dt;
         n.y += n.vy * dt;
         n.x = Math.max(10, Math.min(W - 10, n.x));
