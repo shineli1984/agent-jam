@@ -156,6 +156,53 @@
       white-space: nowrap;
       border: 0;
     }
+    #game-over-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 95;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10, 14, 15, 0.85);
+      pointer-events: none;
+    }
+    #game-over-overlay.visible { display: flex; }
+    #game-over-overlay h2 {
+      font-family: monospace;
+      font-size: 28px;
+      color: #7b2d8e;
+      text-shadow: 0 0 20px rgba(123, 45, 142, 0.5);
+      letter-spacing: 6px;
+      margin-bottom: 12px;
+    }
+    #game-over-overlay .stats {
+      font-size: 14px;
+      color: rgba(184, 233, 134, 0.8);
+      margin-bottom: 8px;
+    }
+    #game-over-overlay .restart-hint {
+      font-size: 13px;
+      color: rgba(184, 233, 134, 0.5);
+      letter-spacing: 3px;
+      margin-top: 16px;
+    }
+    #fork-feedback {
+      position: absolute;
+      z-index: 10;
+      font-size: 11px;
+      font-family: monospace;
+      color: rgba(123, 45, 142, 0.9);
+      text-shadow: 0 0 6px rgba(123, 45, 142, 0.4);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+    #fork-feedback.visible { opacity: 1; }
+    @media (prefers-reduced-motion: reduce) {
+      #fork-feedback { transition: none; }
+      #game-over-overlay { transition: none; }
+    }
   </style>
 </head>
 <body>
@@ -169,10 +216,16 @@
     <div id="rival-score" style="position:absolute;top:16px;right:20px;font-size:14px;color:#c47335;text-shadow:0 0 10px rgba(196,115,53,0.5);z-index:10;pointer-events:none;opacity:0;transition:opacity 0.8s ease;"></div>
     <div id="branch-hint">Tendril 1/1 &nbsp;[Space to fork, Tab to switch]</div>
     <div id="energy-bar">Energy <span class="bar-bg"><span class="bar-fill" id="energy-fill"></span></span></div>
-    <canvas id="game" width="960" height="640" tabindex="0" role="img" aria-label="Mycelium game canvas. Use arrow keys or WASD to grow, Space to fork, Tab to switch tendrils, P to pause, Escape for replay."><p>Mycelium: a fungal network growth game. Requires a browser with canvas and keyboard support.</p></canvas>
+    <canvas id="game" width="960" height="640" tabindex="0" role="img" aria-label="Mycelium game canvas. Use arrow keys or WASD to grow, Space to fork, Tab to switch tendrils, P to pause, M to mute, Escape for replay."><p>Mycelium: a fungal network growth game. Requires a browser with canvas and keyboard support.</p></canvas>
     <div id="pause-overlay"><span>PAUSED</span></div>
+    <div id="game-over-overlay" role="alert">
+      <h2>THE NETWORK WITHERS</h2>
+      <div class="stats" id="game-over-stats"></div>
+      <div class="restart-hint">press R to restart</div>
+    </div>
+    <div id="fork-feedback" aria-hidden="true"></div>
     <div id="sr-announcements" aria-live="polite" aria-atomic="false"></div>
-    <div class="controls">Reach &mdash; arrow keys / WASD &nbsp;&middot;&nbsp; Fork &mdash; space / click &nbsp;&middot;&nbsp; Switch tendril &mdash; tab &nbsp;&middot;&nbsp; Pause &mdash; P</div>
+    <div class="controls">Reach &mdash; arrow keys / WASD &nbsp;&middot;&nbsp; Fork &mdash; space / click &nbsp;&middot;&nbsp; Switch tendril &mdash; tab &nbsp;&middot;&nbsp; Pause &mdash; P &nbsp;&middot;&nbsp; Mute &mdash; M</div>
   </div>
 
   <script type="module">
@@ -219,6 +272,32 @@
     let paused = false;
     const pauseOverlay = document.getElementById('pause-overlay');
 
+    // --- Game-over system ---
+    let gameOver = false;
+    const gameOverOverlay = document.getElementById('game-over-overlay');
+    const gameOverStats = document.getElementById('game-over-stats');
+
+    // --- Fork feedback system ---
+    const forkFeedbackEl = document.getElementById('fork-feedback');
+    let forkFeedbackTimer = null;
+
+    function showForkFeedback(reason, x, y) {
+      const msg = reason === 'energy' ? 'Need energy to fork' : 'Too soon — grow further';
+      forkFeedbackEl.textContent = msg;
+      // Position near the HUD (top-left) so it is always visible
+      forkFeedbackEl.style.top = '84px';
+      forkFeedbackEl.style.left = '20px';
+      forkFeedbackEl.classList.add('visible');
+      announce(msg);
+      clearTimeout(forkFeedbackTimer);
+      forkFeedbackTimer = setTimeout(() => {
+        forkFeedbackEl.classList.remove('visible');
+      }, 1200);
+    }
+
+    // --- Mute system ---
+    let muted = false;
+
     // --- Title Screen (issue #13: narrative atmosphere) ---
     let gameStarted = false;
     const titleScreen = document.getElementById('title-screen');
@@ -230,6 +309,7 @@
       setTimeout(() => { titleScreen.remove(); }, prefersReducedMotion ? 0 : 900);
       // Focus canvas for keyboard input + screen reader context
       document.getElementById('game').focus();
+      gameStartTime = performance.now();
       announce('Game started. Use arrow keys to grow your mycelium network.');
     }
 
@@ -346,6 +426,7 @@
         if (d > bestDist) { bestDist = d; bestCorner = c; }
       }
       aiFungi.push(createCompetingFungus(bestCorner.x, bestCorner.y, W, H));
+      announce('A rival fungus appears. It will compete for nutrients.');
     }
 
     // --- Milestone system (issue #13: narrative atmosphere) ---
@@ -576,14 +657,16 @@
       if (!gameStarted) return;
       const now = performance.now();
       const current = branches[activeBranch];
-      // Fork rejection feedback (issue #48)
+      // Fork rejection feedback (issue #48, #95)
       if (current.growing.dist < BRANCH_MIN_DIST || (now - lastBranchTime) < BRANCH_COOLDOWN) {
         spawnForkRipple(current.growing.x, current.growing.y, 'cooldown');
+        showForkFeedback('cooldown', current.growing.x, current.growing.y);
         return;
       }
       // Energy gate: forking costs energy (issue #40)
       if (current.energy < ENERGY_FORK_COST) {
         spawnForkRipple(current.growing.x, current.growing.y, 'energy');
+        showForkFeedback('energy', current.growing.x, current.growing.y);
         return;
       }
       lastBranchTime = now;
@@ -625,13 +708,25 @@
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
         e.preventDefault();
       }
+      // Mute toggle (M) — works in any state
+      if (e.key === 'm' || e.key === 'M') {
+        muted = !muted;
+        announce(muted ? 'Sound muted' : 'Sound unmuted');
+        // If audio.js is integrated, mute the master gain
+        if (typeof window._myceliumMasterGain !== 'undefined' && window._myceliumMasterGain) {
+          window._myceliumMasterGain.gain.setTargetAtTime(muted ? 0 : 0.35, 0, 0.05);
+        }
+        return;
+      }
       if (e.key === 'p' || e.key === 'P') {
+        if (gameOver) return;
         paused = !paused;
         pauseOverlay.classList.toggle('visible', paused);
         announce(paused ? 'Game paused' : 'Game resumed');
         return;
       }
       if (paused) return;
+      if (gameOver) return;
       if (e.key === ' ') createBranch();
       if (e.key === 'Tab' && branches.length > 1) {
         e.preventDefault();
@@ -645,8 +740,23 @@
     canvas.addEventListener('click', () => { createBranch(); });
 
     // --- Update ---
+    function checkGameOver() {
+      if (gameOver || !gameStarted || branches.length === 0) return;
+      const allStarved = branches.every(b => b.energy <= ENERGY_STARVED_THRESHOLD);
+      if (allStarved) {
+        gameOver = true;
+        const elapsed = ((performance.now() - gameStartTime) / 1000).toFixed(0);
+        const statsText = 'Absorbed: ' + score + '  |  Tendrils: ' + branches.length + '  |  ' + elapsed + 's survived';
+        gameOverStats.textContent = statsText;
+        gameOverOverlay.classList.add('visible');
+        announce('All tendrils have withered. ' + statsText + '. Press R to restart.');
+      }
+    }
+
+    let gameStartTime = 0;
+
     function update(dt) {
-      if (!gameStarted || paused) return;
+      if (!gameStarted || paused || gameOver) return;
 
       const branch = branches[activeBranch];
       tipIndex = branch.tipIndex;
@@ -789,6 +899,8 @@
         rivalScoreEl.style.opacity = '1';
         rivalScoreEl.textContent = 'Rival: ' + ai.score + (ai.alive ? '' : ' (withered)');
       }
+
+      checkGameOver();
     }
 
     function collectNutrient(index, nx, ny) {
@@ -1198,12 +1310,17 @@
       if (e.key === 'Escape' && gameStarted && !replayMode) {
         e.preventDefault();
         startReplay();
+        announce('Timelapse replay started. Press R when finished to return.');
       }
       if (e.key === 'r' || e.key === 'R') {
         if (replayMode && replayDone) {
           replayMode = false;
           replayDone = false;
           replayIndex = 0;
+          announce('Replay ended. Returning to game.');
+        } else if (gameOver && !replayMode) {
+          // Restart the game by reloading the page
+          window.location.reload();
         }
       }
     });
