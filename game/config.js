@@ -68,7 +68,8 @@ const DEFAULTS = Object.freeze({
     magneticRadius: 70,      // MAGNETIC_RADIUS — pull activation distance
     magneticStrength: 180,   // MAGNETIC_STRENGTH — base pull force (px/s^2)
     magneticDamping: 0.92,   // MAGNETIC_DAMPING — velocity damping per frame
-    nearOriginCount: 2,      // initial nutrients spawned near player origin
+    nearOriginCount: 3,      // initial nutrients spawned near player origin
+    guaranteedNearDist: 45,  // one nutrient always spawns within this distance (px) of origin
     clusterJitter: 0.20,     // position jitter within quadrant for cluster seeds
     scatterMin: 30,          // min scatter distance from cluster seed
     scatterMax: 90,          // max scatter distance from cluster seed
@@ -85,6 +86,8 @@ const DEFAULTS = Object.freeze({
     forkCost: 0.15,          // flat cost to fork a new branch
     replenish: 0.4,          // gained when nearest branch absorbs nutrient
     starvedThreshold: 0,     // at or below this, branch is starved
+    gracePeriod: 15,         // seconds of reduced drain at start (score 0, no absorptions)
+    graceMultiplier: 0.3,    // drain multiplier during grace period (0.3 = 30% of normal drain)
   },
 
   // --- AI Competitor ---
@@ -155,6 +158,7 @@ export const PRESETS = {
       drainGrow: 0,
       forkCost: 0.05,
       replenish: 0.6,
+      gracePeriod: 0,         // zen has no drain, grace period unnecessary
     },
     nutrients: {
       count: 14,
@@ -194,6 +198,8 @@ export const PRESETS = {
       drainGrow: 0.12,
       forkCost: 0.08,
       replenish: 0.5,
+      gracePeriod: 8,          // shorter grace for chaos — still gives orientation time
+      graceMultiplier: 0.5,    // less forgiving than default
     },
     nutrients: {
       count: 12,
