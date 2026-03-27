@@ -1033,16 +1033,19 @@
         n.y = Math.max(10, Math.min(H - 10, n.y));
       }
 
-      // Collection
+      // Collection — energy goes to the collecting branch, not nearest (#141)
       for (let i = nutrients.length - 1; i >= 0; i--) {
         const n = nutrients[i];
+        // Check active branch first
         if (dist(growing.x, growing.y, n.x, n.y) < COLLECT_RADIUS) {
-          collectNutrient(i, n.x, n.y); continue;
+          collectNutrient(i, n.x, n.y, activeBranch); continue;
         }
+        // Check all other branches
         let collected = false;
-        for (const b of branches) {
+        for (let bi = 0; bi < branches.length; bi++) {
+          const b = branches[bi];
           if (dist(b.growing.x, b.growing.y, n.x, n.y) < COLLECT_RADIUS) {
-            collectNutrient(i, n.x, n.y); collected = true; break;
+            collectNutrient(i, n.x, n.y, bi); collected = true; break;
           }
         }
         if (collected) continue;
@@ -1068,7 +1071,7 @@
       checkGameOver();
     }
 
-    function collectNutrient(index, nx, ny) {
+    function collectNutrient(index, nx, ny, collectingBranch) {
       const collected = nutrients[index];
       if (!prefersReducedMotion) {
         spawnBurst(collected.x, collected.y, PALETTE.sporeGold);
@@ -1081,9 +1084,10 @@
       if (!muted) triggerCollect();
       checkScoreMilestone();
 
-      // Replenish energy of nearest branch (issue #40)
-      const nearest = nearestBranch(nx, ny);
-      branches[nearest].energy = Math.min(ENERGY_MAX, branches[nearest].energy + ENERGY_REPLENISH);
+      // Replenish energy of the collecting branch (issue #141)
+      // Previously used nearestBranch which allowed farming exploits
+      const target = collectingBranch !== undefined ? collectingBranch : nearestBranch(nx, ny);
+      branches[target].energy = Math.min(ENERGY_MAX, branches[target].energy + ENERGY_REPLENISH);
 
       // Respawn near the same cluster region (issue #80)
       spawnNutrient(false, nx, ny);
