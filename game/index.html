@@ -261,7 +261,7 @@
     import { spawnBurst, updateParticles, renderParticles } from './particles.js';
     import { createCompetingFungus, updateCompetingFungus, renderCompetingFungus } from './ai.js';
     import { easeOutQuad, easeOutElastic, easeOutCubic, easeOutBack, easeInQuad, lerp, Tween, tweens } from './easing.js';
-    import { initAudio, updateAudio, triggerCollect, triggerFork, triggerStarvation, triggerRivalCollect } from './audio.js';
+    import { initAudio, updateAudio, triggerCollect, triggerFork, triggerStarvation, triggerRivalCollect, triggerBranchSwitch, triggerMilestone, triggerRivalSpawn, triggerGameOver } from './audio.js';
 
     // --- Accessibility: reduced motion + screen reader ---
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -492,11 +492,13 @@
         const mx = W / 2 + (Math.random() - 0.5) * 60;
         const my = H / 2 + (Math.random() - 0.5) * 30;
         showMilestone(SCORE_MILESTONES[score], mx, my, PALETTE.myceliumGlow);
+        if (!muted) triggerMilestone(score);
         announce(SCORE_MILESTONES[score]);
 
         // "You are not alone" — spawn the first competing fungus (#78)
         // Spawn threshold configurable via CONFIG.ai.spawnScore (issue #119)
         if (score === CONFIG.ai.spawnScore && CONFIG.ai.enabled) {
+          if (!muted) triggerRivalSpawn();
           spawnAIFungus();
         }
       }
@@ -802,6 +804,7 @@
       if (e.key === 'Tab' && branches.length > 1) {
         e.preventDefault();
         activeBranch = (activeBranch + 1) % branches.length;
+        if (!muted) triggerBranchSwitch();
         updateBranchHint();
         updateEnergyBar();
       }
@@ -816,6 +819,7 @@
       const allStarved = branches.every(b => b.energy <= ENERGY_STARVED_THRESHOLD);
       if (allStarved) {
         gameOver = true;
+        if (!muted) triggerGameOver();
         const elapsed = ((performance.now() - gameStartTime) / 1000).toFixed(0);
         const statsText = 'Absorbed: ' + score + '  |  Tendrils: ' + branches.length + '  |  ' + elapsed + 's survived';
         gameOverStats.textContent = statsText;
