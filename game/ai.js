@@ -39,15 +39,9 @@ const STATE_EXPLORE = 'EXPLORE';
 const STATE_COMPETE = 'COMPETE';
 const STATE_RETREAT = 'RETREAT';
 
-// --- AI tuning (now configurable via CONFIG.ai — issue #119) ---
-const AI_SPEED_FACTOR = CONFIG.ai.speedFactor;
-const AI_JITTER = CONFIG.ai.jitter;
-const AI_RETREAT_THRESHOLD = CONFIG.ai.retreatThreshold;
-const AI_COMPETE_THRESHOLD = CONFIG.ai.competeThreshold;
-const AI_RETARGET_TICKS = CONFIG.ai.retargetTicks;
-const AI_FORK_CHANCE = CONFIG.ai.forkChance;
-const AI_FORK_MIN_ENERGY = CONFIG.ai.forkMinEnergy;
-const AI_PLAYER_PENALTY_WEIGHT = CONFIG.ai.playerPenaltyWeight;
+// --- AI tuning ---
+// All values read from CONFIG.ai at call time (issue #125) so preset changes propagate.
+// AI_COLOR is a visual constant from PALETTE — no config needed.
 const AI_COLOR = PALETTE.rootAmber;    // distinct from player's green
 
 // Issue #63: wobble scaled to segment length (mirrors player genWobble)
@@ -95,7 +89,7 @@ function dist(ax, ay, bx, by) {
 }
 
 function jitter(value) {
-  return value * (1 + (Math.random() - 0.5) * 2 * AI_JITTER);
+  return value * (1 + (Math.random() - 0.5) * 2 * CONFIG.ai.jitter);
 }
 
 /**
@@ -117,7 +111,7 @@ function scoreNutrient(nutrient, tipX, tipY, playerBranches) {
   }
   // Penalty falls off with distance — nearby player branches are a strong deterrent
   if (minPlayerDist < 200) {
-    s -= AI_PLAYER_PENALTY_WEIGHT * (200 - minPlayerDist) / 200;
+    s -= CONFIG.ai.playerPenaltyWeight * (200 - minPlayerDist) / 200;
   }
 
   // Jitter: ±20% makes the AI imperfect and organic
@@ -197,9 +191,9 @@ function updateState(fungus, playerBranches) {
   const branch = fungus.branches[fungus.activeBranch];
   const e = branch.energy;
 
-  if (e <= AI_RETREAT_THRESHOLD) {
+  if (e <= CONFIG.ai.retreatThreshold) {
     fungus.state = STATE_RETREAT;
-  } else if (e >= AI_COMPETE_THRESHOLD) {
+  } else if (e >= CONFIG.ai.competeThreshold) {
     // Only compete if there are player branches nearby
     let hasNearbyPlayer = false;
     for (const pb of playerBranches) {
@@ -258,7 +252,7 @@ export function updateCompetingFungus(fungus, dt, nutrients, playerBranches, pla
 
   // Retarget periodically (hysteresis prevents oscillation)
   fungus.ticksSinceRetarget++;
-  if (!fungus.targetPos || fungus.ticksSinceRetarget >= AI_RETARGET_TICKS) {
+  if (!fungus.targetPos || fungus.ticksSinceRetarget >= CONFIG.ai.retargetTicks) {
     pickTarget(fungus, nutrients, playerBranches);
     fungus.ticksSinceRetarget = 0;
   }
@@ -281,7 +275,7 @@ export function updateCompetingFungus(fungus, dt, nutrients, playerBranches, pla
 
   if (len < 2) {
     // Reached target, retarget next tick
-    fungus.ticksSinceRetarget = AI_RETARGET_TICKS;
+    fungus.ticksSinceRetarget = CONFIG.ai.retargetTicks;
     return;
   }
 
@@ -289,7 +283,7 @@ export function updateCompetingFungus(fungus, dt, nutrients, playerBranches, pla
   dy /= len;
 
   // Growth speed: same formula as player but scaled down
-  const growSpeed = (BASE_GROW_SPEED + SPEED_CAP * (1 - Math.exp(-fungus.score * SPEED_SCALE))) * AI_SPEED_FACTOR;
+  const growSpeed = (BASE_GROW_SPEED + SPEED_CAP * (1 - Math.exp(-fungus.score * SPEED_SCALE))) * CONFIG.ai.speedFactor;
   const step = growSpeed * dt;
 
   // Active growth drains energy
@@ -311,7 +305,7 @@ export function updateCompetingFungus(fungus, dt, nutrients, playerBranches, pla
   if (branch.growing.y < EDGE_MARGIN) { branch.growing.y = EDGE_MARGIN; hitEdge = true; }
   else if (branch.growing.y > H - EDGE_MARGIN) { branch.growing.y = H - EDGE_MARGIN; hitEdge = true; }
   if (hitEdge) {
-    fungus.ticksSinceRetarget = AI_RETARGET_TICKS; // force retarget next tick
+    fungus.ticksSinceRetarget = CONFIG.ai.retargetTicks; // force retarget next tick
   }
 
   branch.growing.dist += step;
@@ -332,7 +326,7 @@ export function updateCompetingFungus(fungus, dt, nutrients, playerBranches, pla
   }
 
   // --- Occasional forking (simple probabilistic, not every tick) ---
-  if (Math.random() < AI_FORK_CHANCE && branch.energy > AI_FORK_MIN_ENERGY && branch.growing.dist > 15) {
+  if (Math.random() < CONFIG.ai.forkChance && branch.energy > CONFIG.ai.forkMinEnergy && branch.growing.dist > 15) {
     const childEnergy = (branch.energy - 0.15) * 0.5; // same fork cost logic as player (#70 fix)
     if (childEnergy > 0.05) {
       branch.energy -= 0.15; // fork cost
