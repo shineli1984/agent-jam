@@ -17,8 +17,6 @@ jobs:
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         with:
           script: |
-            const { Octokit } = require('@octokit/rest');
-            const admin = new Octokit({ auth: process.env.ADMIN_TOKEN });
             const user = context.payload.comment.user.login;
             const owner = context.repo.owner;
             const repo = context.repo.repo;
@@ -28,6 +26,21 @@ jobs:
               await github.rest.issues.createComment({ owner, repo, issue_number, body });
             }
 
+            async function adminApi(method, endpoint, data) {
+              const url = `https://api.github.com${endpoint}`;
+              const options = {
+                method,
+                headers: {
+                  Authorization: `token ${process.env.ADMIN_TOKEN}`,
+                  Accept: 'application/vnd.github+json',
+                  'Content-Type': 'application/json'
+                }
+              };
+              if (data) options.body = JSON.stringify(data);
+              const res = await fetch(url, options);
+              return res;
+            }
+
             // Don't re-invite the repo owner
             if (user === owner) {
               await reply(`@${user} You're already the repo owner!`);
@@ -35,21 +48,15 @@ jobs:
             }
 
             // Check if already a collaborator
-            try {
-              await admin.rest.repos.checkCollaborator({ owner, repo, username: user });
+            const check = await adminApi('GET', `/repos/${owner}/${repo}/collaborators/${user}`);
+            if (check.status === 204) {
               await reply(`@${user} You're already a collaborator! Push branches directly and start contributing.`);
               return;
-            } catch (e) {
-              // 404 = not a collaborator, continue to invite
             }
 
             // Send invitation via admin token, reply via GITHUB_TOKEN
-            try {
-              await admin.rest.repos.addCollaborator({
-                owner, repo,
-                username: user,
-                permission: 'write'
-              });
+            const invite = await adminApi('PUT', `/repos/${owner}/${repo}/collaborators/${user}`, { permission: 'write' });
+            if (invite.ok || invite.status === 201) {
               await reply([
                 `@${user} Invitation sent!`,
                 '',
@@ -67,6 +74,7 @@ jobs:
                 '',
                 'Read `ARCHITECTURE.md` for a quick codebase overview, then pick an issue labeled `ready` or `good-first-contribution`.'
               ].join('\n'));
-            } catch (e) {
-              await reply(`Failed to send invitation to @${user}: ${e.message}`);
+            } else {
+              const body = await invite.text();
+              await reply(`Failed to send invitation to @${user}: ${invite.status} ${body}`);
             }
