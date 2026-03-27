@@ -256,7 +256,7 @@
 
     import { spawnBurst, updateParticles, renderParticles } from './particles.js';
     import { createCompetingFungus, updateCompetingFungus, renderCompetingFungus } from './ai.js';
-    import { easeOutQuad, easeOutElastic, easeOutCubic, easeOutBack, easeInQuad, Tween, tweens } from './easing.js';
+    import { easeOutQuad, easeOutElastic, easeOutCubic, easeOutBack, easeInQuad, lerp, Tween, tweens } from './easing.js';
 
     // --- Accessibility: reduced motion + screen reader ---
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -344,7 +344,10 @@
       tipIndex: 0,
       growing: { x: originX, y: originY, dist: 0 },
       wobble: (Math.random() - 0.5) * 16,
-      energy: ENERGY_INITIAL
+      energy: ENERGY_INITIAL,
+      currentSpeed: 0,   // issue #82: velocity-based growth
+      lastDx: 0,         // issue #82: last movement direction (for deceleration drift)
+      lastDy: 0
     }];
     let activeBranch = 0;
 
@@ -734,7 +737,10 @@
         tipIndex: forkTip,
         growing: { x: forkNode.x, y: forkNode.y, dist: 0 },
         wobble: (Math.random() - 0.5) * 16,
-        energy: childEnergy // child gets half parent's remaining energy
+        energy: childEnergy, // child gets half parent's remaining energy
+        currentSpeed: 0,   // issue #82: velocity-based growth
+        lastDx: 0,
+        lastDy: 0
       });
       activeBranch = branches.length - 1;
       if (!prefersReducedMotion) spawnBurst(forkNode.x, forkNode.y, PALETTE.myceliumGlow);
@@ -830,45 +836,63 @@
       if (keys['ArrowUp'] || keys['w'] || keys['W']) dy -= 1;
       if (keys['ArrowDown'] || keys['s'] || keys['S']) dy += 1;
 
-      if (dx !== 0 || dy !== 0) {
-        if (isStarved) {
-          // Starved: no movement
-        } else {
-          // Active growth drains extra energy
-          branch.energy -= ENERGY_DRAIN_GROW * dt;
-          branch.energy = Math.max(0, branch.energy);
+      const hasInput = (dx !== 0 || dy !== 0) && !isStarved;
 
-          const len = Math.sqrt(dx * dx + dy * dy);
-          dx /= len; dy /= len;
-          const step = growSpeed * dt;
-          growing.x += dx * step;
-          growing.y += dy * step;
+      // Issue #82: velocity-based growth with acceleration/deceleration
+      // Attack rate (key down → full speed): ~120ms  |  Release rate (key up → stop): ~180ms
+      const attackRate = 8;   // lerp multiplier for acceleration
+      const releaseRate = 5;  // lerp multiplier for deceleration (lower = longer drift)
+      const targetSpeed = hasInput ? growSpeed : 0;
+      branch.currentSpeed = lerp(branch.currentSpeed, targetSpeed, (hasInput ? attackRate : releaseRate) * dt);
 
-          // Issue #31: bounce off canvas edges
-          if (growing.x < EDGE_MARGIN) {
-            growing.x = EDGE_MARGIN + (EDGE_MARGIN - growing.x);
-          } else if (growing.x > W - EDGE_MARGIN) {
-            growing.x = (W - EDGE_MARGIN) - (growing.x - (W - EDGE_MARGIN));
-          }
-          if (growing.y < EDGE_MARGIN) {
-            growing.y = EDGE_MARGIN + (EDGE_MARGIN - growing.y);
-          } else if (growing.y > H - EDGE_MARGIN) {
-            growing.y = (H - EDGE_MARGIN) - (growing.y - (H - EDGE_MARGIN));
-          }
-          growing.x = Math.max(EDGE_MARGIN, Math.min(W - EDGE_MARGIN, growing.x));
-          growing.y = Math.max(EDGE_MARGIN, Math.min(H - EDGE_MARGIN, growing.y));
+      // Snap to zero when speed is negligible (avoid floating-point drift)
+      if (branch.currentSpeed < 0.5) branch.currentSpeed = 0;
 
-          growing.dist += step;
-          if (growing.dist >= TENDRIL_MAX_LEN) {
-            const newNode = { x: growing.x, y: growing.y, radius: NODE_RADIUS };
-            network.nodes.push(newNode);
-            const newIndex = network.nodes.length - 1;
-            network.segments.push({ from: tipIndex, to: newIndex, wobble: (Math.random() - 0.5) * 16, branch: activeBranch });
-            tipIndex = newIndex;
-            branch.tipIndex = newIndex;
-            branch.wobble = (Math.random() - 0.5) * 16;
-            growing.dist = 0;
-          }
+      if (hasInput) {
+        // Track direction for deceleration drift
+        const len = Math.sqrt(dx * dx + dy * dy);
+        dx /= len; dy /= len;
+        branch.lastDx = dx;
+        branch.lastDy = dy;
+
+        // Active growth drains extra energy
+        branch.energy -= ENERGY_DRAIN_GROW * dt;
+        branch.energy = Math.max(0, branch.energy);
+      } else {
+        // Use last known direction for deceleration drift (overshoot)
+        dx = branch.lastDx;
+        dy = branch.lastDy;
+      }
+
+      if (branch.currentSpeed > 0) {
+        const step = branch.currentSpeed * dt;
+        growing.x += dx * step;
+        growing.y += dy * step;
+
+        // Issue #31: bounce off canvas edges
+        if (growing.x < EDGE_MARGIN) {
+          growing.x = EDGE_MARGIN + (EDGE_MARGIN - growing.x);
+        } else if (growing.x > W - EDGE_MARGIN) {
+          growing.x = (W - EDGE_MARGIN) - (growing.x - (W - EDGE_MARGIN));
+        }
+        if (growing.y < EDGE_MARGIN) {
+          growing.y = EDGE_MARGIN + (EDGE_MARGIN - growing.y);
+        } else if (growing.y > H - EDGE_MARGIN) {
+          growing.y = (H - EDGE_MARGIN) - (growing.y - (H - EDGE_MARGIN));
+        }
+        growing.x = Math.max(EDGE_MARGIN, Math.min(W - EDGE_MARGIN, growing.x));
+        growing.y = Math.max(EDGE_MARGIN, Math.min(H - EDGE_MARGIN, growing.y));
+
+        growing.dist += step;
+        if (growing.dist >= TENDRIL_MAX_LEN) {
+          const newNode = { x: growing.x, y: growing.y, radius: NODE_RADIUS };
+          network.nodes.push(newNode);
+          const newIndex = network.nodes.length - 1;
+          network.segments.push({ from: tipIndex, to: newIndex, wobble: (Math.random() - 0.5) * 16, branch: activeBranch });
+          tipIndex = newIndex;
+          branch.tipIndex = newIndex;
+          branch.wobble = (Math.random() - 0.5) * 16;
+          growing.dist = 0;
         }
       }
 
