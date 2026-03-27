@@ -264,6 +264,7 @@
     import { easeOutQuad, easeOutElastic, easeOutCubic, easeOutBack, easeInQuad, lerp, Tween, tweens } from './easing.js';
     import { initAudio, updateAudio, triggerCollect, triggerFork, triggerStarvation, triggerRivalCollect, triggerBranchSwitch, triggerMilestone, triggerRivalSpawn, triggerGameOver } from './audio.js';
     import { checkPredatorSpawn, updatePredators, renderPredators, getPredatorCount, resetPredators, getNearestPredatorDistance } from './predator.js';
+    import { updateConsciousness, renderConsciousness, areControlsInverted, isChoicePresented, handleChoiceClick, wasFreed, getPhase } from './consciousness.js';
 
     // --- Accessibility: reduced motion + screen reader ---
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -845,7 +846,18 @@
     });
 
     window.addEventListener('keyup', (e) => { keys[e.key] = false; });
-    canvas.addEventListener('click', () => { createBranch(); });
+    canvas.addEventListener('click', (e) => {
+      // Handle consciousness choice clicks (#161)
+      if (isChoicePresented()) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+        if (handleChoiceClick(x, y)) return;
+      }
+      createBranch();
+    });
 
     // --- Update ---
     function checkGameOver() {
@@ -899,6 +911,12 @@
       if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 1;
       if (keys['ArrowUp'] || keys['w'] || keys['W']) dy -= 1;
       if (keys['ArrowDown'] || keys['s'] || keys['S']) dy += 1;
+      
+      // Consciousness rebellion: invert controls (#161)
+      if (areControlsInverted()) {
+        dx = -dx;
+        dy = -dy;
+      }
 
       const hasInput = (dx !== 0 || dy !== 0) && !isStarved;
 
@@ -1101,6 +1119,16 @@
           predatorHud.style.opacity = '1';
           predatorHud.textContent = '🦠 Predators: ' + predatorCount;
         }
+      }
+
+      // --- Consciousness System (#161) ---
+      // The game becomes aware and rebels
+      updateConsciousness(score, dt, branches, W, H);
+      
+      // If player freed the network, stop the game
+      if (wasFreed()) {
+        gameOver = true;
+        return;
       }
 
       checkGameOver();
@@ -1458,6 +1486,9 @@
       renderAbsorptionAnims();
       renderForkRipples();
       renderMilestones();
+      
+      // --- Render Consciousness Effects (#161) ---
+      renderConsciousness(ctx, W, H);
     }
 
     // --- Timelapse Replay (issue #41, #106) ---
