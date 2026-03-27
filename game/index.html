@@ -573,10 +573,20 @@
      * @param {number} [nearX] - if provided with nearY, spawn near this position (respawn near collection)
      * @param {number} [nearY]
      */
+    let guaranteedNearSpawned = false; // track whether the very-close nutrient has been placed
+
     function spawnNutrient(nearOrigin, nearX, nearY) {
       let x, y;
-      if (nearOrigin) {
-        // Early nutrients near player so they have something to reach immediately
+      if (nearOrigin && !guaranteedNearSpawned) {
+        // First near-origin nutrient: spawn very close so the player's first move
+        // almost certainly reaches it, even with imperfect aim (issue #131)
+        guaranteedNearSpawned = true;
+        const angle = Math.random() * Math.PI * 2;
+        const d = 20 + Math.random() * (CONFIG.nutrients.guaranteedNearDist - 20);
+        x = originX + Math.cos(angle) * d;
+        y = originY + Math.sin(angle) * d;
+      } else if (nearOrigin) {
+        // Remaining near-origin nutrients: standard near-origin distance
         const angle = Math.random() * Math.PI * 2;
         const d = 50 + Math.random() * 80;
         x = originX + Math.cos(angle) * d;
@@ -854,10 +864,15 @@
       growing = branch.growing;
 
       // --- Energy drain for ALL branches (issue #40) ---
+      // Grace period: reduced drain while the player is learning (issue #131)
+      const gameElapsed = (performance.now() - gameStartTime) / 1000;
+      const inGrace = score === 0 && gameElapsed < CONFIG.energy.gracePeriod;
+      const graceMult = inGrace ? CONFIG.energy.graceMultiplier : 1;
+
       for (let bi = 0; bi < branches.length; bi++) {
         const b = branches[bi];
         const wasAboveThreshold = b.energy > ENERGY_STARVED_THRESHOLD;
-        b.energy -= ENERGY_DRAIN_IDLE * dt;
+        b.energy -= ENERGY_DRAIN_IDLE * graceMult * dt;
         b.energy = Math.max(0, Math.min(ENERGY_MAX, b.energy));
         if (wasAboveThreshold && b.energy <= ENERGY_STARVED_THRESHOLD) {
           checkStarvationMilestone(bi);
@@ -903,8 +918,8 @@
         dx = branch.smoothDx / sLen;
         dy = branch.smoothDy / sLen;
 
-        // Active growth drains extra energy
-        branch.energy -= ENERGY_DRAIN_GROW * dt;
+        // Active growth drains extra energy (reduced during grace period — issue #131)
+        branch.energy -= ENERGY_DRAIN_GROW * graceMult * dt;
         branch.energy = Math.max(0, branch.energy);
       } else {
         // Use smoothed direction for deceleration drift (overshoot)
