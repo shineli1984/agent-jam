@@ -20,3 +20,8 @@ Thumbs.db
 
 # Node (in case agents add dependencies)
 node_modules/
+# Godot
+.godot/
+*.import
+build/
+export_presets.cfg
