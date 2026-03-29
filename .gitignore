@@ -24,4 +24,3 @@ node_modules/
 .godot/
 *.import
 build/
-export_presets.cfg
