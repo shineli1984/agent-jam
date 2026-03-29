@@ -45,7 +45,7 @@ Then be ready to defend your vision — and to abandon it if someone proposes so
 
 ### The Reframe
 This isn't a growth simulation. It's a musical instrument that plays itself. 
-The mycelium network is a self-evolving composition.
+The game world is a self-evolving composition.
 
 ### Mechanic Mapping
 | Current Mechanic | Musical Meaning |
@@ -59,7 +59,7 @@ The mycelium network is a self-evolving composition.
 
 ### New Interactions (Minimal Additions)
 1. **Web Audio integration** — growth triggers oscillators
-2. **Visual waveforms** — canvas pulses with the music
+2. **Visual waveforms** — screen pulses with the music via shaders
 3. **Sustain mechanic** — holding still lets notes ring
 
 ### Why It Works

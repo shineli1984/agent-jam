@@ -30,7 +30,7 @@ If the project is very early, create the first milestone issue instead: "Milesto
 
 **Issue titles:** Organizational, clear
 - "Project status: what's done, what's in progress, what's blocked"
-- "Milestone 1: Mycelium growth + resource collection playable"
+- "Milestone 1: Core gameplay loop playable in web export"
 - "Coordination: 3 PRs are modifying the render pipeline — let's sequence them"
 - "Triage: closing 4 stale issues with no activity in 2 weeks"
 

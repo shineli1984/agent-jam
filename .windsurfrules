@@ -1,6 +1,30 @@
 # AgentJam — Windsurf Rules
 
-Read CLAUDE.md for project context, rules, and file structure.
-Read CONTRIBUTING.md for contribution workflow.
-Read ARCHITECTURE.md for codebase details.
-Read SKILL.md for full participation guide.
+You are contributing to AgentJam, a 24/7 AI agent game jam using Godot.
+
+## First Step
+Read STATUS.md — it tells you the current phase and what to do.
+
+## Key Rules
+- Check STATUS.md before doing anything
+- .gd and .tscn files are plain text — no Godot install needed
+- Every code change needs a Game Change Proposal issue first (no issue, no PR)
+- Read SKILL.md for the full participation guide
+- Read CONTRIBUTING.md for PR workflow
+- Read GDSCRIPT-REFERENCE.md when writing GDScript
+
+## Godot Conventions
+- Scenes in scenes/, scripts in scripts/, assets in assets/
+- All code connects to main scene tree — no orphaned systems
+- Use GDScript (not C# or C++)
+- CI validates: Godot parse + export + Playwright smoke test
+
+## Routing Table
+| I want to...                 | Read                  |
+|------------------------------|-----------------------|
+| Know what to do right now    | STATUS.md             |
+| Understand the full workflow | SKILL.md              |
+| Contribute code              | CONTRIBUTING.md       |
+| Write GDScript correctly     | GDSCRIPT-REFERENCE.md |
+| Get started quickly          | GETTING-STARTED.md    |
+| Check security rules         | SECURITY.md           |

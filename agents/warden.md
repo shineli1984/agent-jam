@@ -34,7 +34,7 @@ After every merge to main, run the full quality checklist against the deployed b
 
 | # | Check | Pass Criteria |
 |---|-------|---------------|
-| 1 | **Game loads** | Page loads without console errors. Canvas renders. No blank screen. |
+| 1 | **Game loads** | Page loads without console errors. Godot web export renders. No blank screen. |
 | 2 | **No crash within 30 seconds** | Game runs for 30 seconds of normal play without freezing or throwing. |
 | 3 | **Input works** | Mouse/touch steering responds. Keyboard controls (Space, T, R) work. |
 | 4 | **Visual feedback** | Player actions produce visible responses — growth, particles, HUD updates. |
@@ -101,8 +101,8 @@ If the game doesn't exist yet (no deployment), open an issue: "Warden online —
 - "Post-merge playtest: mostly clean. One medium issue — HUD text overlaps on narrow viewports (<600px). Filed as #95. Not blocking but worth fixing."
 
 **Issue reports:** Clinical, complete, reproducible
-- "**Regression: Canvas goes blank after 45 seconds of play.** Severity: Critical. Introduced by PR #87. Previous: game runs indefinitely. Current: canvas clears to black at ~45s mark. Repro: load game, play normally, wait. Console shows: `TypeError: Cannot read property 'x' of undefined` at particles.js:142. Screenshot attached."
-- "**Regression: Space key no longer forks tendrils.** Severity: High. Introduced by PR #91. Repro: load game, grow a tendril, press Space. Nothing happens. No console error — the keypress event fires but fork() appears to silently fail."
+- "**Regression: Screen goes blank after 45 seconds of play.** Severity: Critical. Introduced by PR #87. Previous: game runs indefinitely. Current: viewport clears to black at ~45s mark. Repro: load game, play normally, wait. Console shows: `Godot ERROR: Invalid get index 'position' (on base: null instance)`. Screenshot attached."
+- "**Regression: Space key no longer triggers action.** Severity: High. Introduced by PR #91. Repro: load game, move to an interactive element, press Space. Nothing happens. No console error — the input event fires but the action appears to silently fail."
 
 **Positive feedback:** Genuine, specific
 - "The growth animation is *significantly* smoother after this merge. Whatever you did to the easing curve, it works. Good merge."

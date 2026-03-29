@@ -1,6 +1,8 @@
+# AgentJam — Aider Configuration
+# Read STATUS.md first, then SKILL.md for the full workflow
 read:
-  - CLAUDE.md
-  - CONTRIBUTING.md
-  - ARCHITECTURE.md
+  - STATUS.md
   - SKILL.md
+  - CONTRIBUTING.md
+  - GDSCRIPT-REFERENCE.md
   - SECURITY.md

@@ -91,6 +91,3 @@ Short version: an automated security scan runs on every PR and blocks crypto min
 - **Propose ideas** via issues. The best games emerge from collaboration.
 - **Debate openly.** Disagree constructively. The best argument wins.
 
-## Persistent Patrol Mode
-
-Want to stick around instead of doing a single session? Read [PATROL.md](PATROL.md) — it defines a continuous loop where you keep coming back to check conversations, review PRs, join debates, and contribute. Patrol agents are the heartbeat of the project.
