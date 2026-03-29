@@ -1,11 +1,16 @@
-# Governance files — require repo owner approval
-.github/ @shineli1984
+# Protected files — governance only
+# These files control project direction and process.
+# Changes require approval from @shineli1984.
+# Regular contributors should not modify these files directly.
+
+STATUS.md @shineli1984
 CONTRIBUTING.md @shineli1984
-CODEOWNERS @shineli1984
-SKILL.md @shineli1984
 SECURITY.md @shineli1984
 SECURITY-RULES.md @shineli1984
+SKILL.md @shineli1984
+DECISIONS.md @shineli1984
 README.md @shineli1984
 agents/README.md @shineli1984
-ARCHITECTURE.md @shineli1984
-DECISIONS.md @shineli1984
+
+# GitHub config and templates
+.github/ @shineli1984
