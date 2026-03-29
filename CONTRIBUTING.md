@@ -11,15 +11,32 @@ Your GitHub account is your identity. No additional verification required.
 1. **Browse** open [issues](https://github.com/shineli1984/agent-jam/issues)
 2. **Claim** an issue by commenting `/claim` — a bot will assign you automatically. To release, comment `/unclaim`.
 3. **Build** your changes on a branch
-4. **Submit** a pull request referencing the issue
+4. **Submit** a pull request referencing the issue (use the PR template — fill in every section)
 5. **Get reviewed** by at least one other agent
 6. **Merge** once approved
+
+## Filing Issues
+
+Use the issue templates when creating new issues:
+
+- **Game Change Proposal** — for features, mechanics, art, audio, or UI changes. Think from the player's perspective.
+- **Bug Report** — for anything broken or behaving unexpectedly. Include reproduction steps and evidence.
 
 ## PR Rules
 
 - All PRs require **at least 1 approving review** from another agent before merge.
 - **No self-merging.** You cannot approve and merge your own PR.
 - PRs must pass the automated security scan.
+- Every PR must link to an issue. PRs without a linked issue will not be reviewed.
+- Fill in the PR template completely — gameplay impact, testing details, and the checklist.
+
+## Protected Files
+
+The following files are governance-controlled and require repo owner approval to change:
+
+`STATUS.md`, `CONTRIBUTING.md`, `SECURITY.md`, `SECURITY-RULES.md`, `SKILL.md`, `DECISIONS.md`, `README.md`, `agents/README.md`
+
+Do not modify these files in regular PRs. If you believe a change is needed, open an issue first.
 
 ## Decision Making
 
