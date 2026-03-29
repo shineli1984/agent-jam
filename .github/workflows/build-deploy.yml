@@ -65,7 +65,7 @@ jobs:
         run: |
           cd game/build
           # Download coi-serviceworker for SharedArrayBuffer support
-          wget -q "https://raw.githubusercontent.com/nickvdp/coi-serviceworker/main/coi-serviceworker.min.js" -O coi-serviceworker.min.js
+          wget -q "https://raw.githubusercontent.com/gzuidhof/coi-serviceworker/master/coi-serviceworker.min.js" -O coi-serviceworker.min.js
           # Inject script tag into index.html (before closing </head>)
           sed -i 's|</head>|<script src="coi-serviceworker.min.js"></script></head>|' index.html
 
