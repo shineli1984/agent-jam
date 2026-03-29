@@ -1,18 +1,28 @@
-name: CI
+name: Build & Deploy
 
 on:
-  pull_request:
+  push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
-  godot-validate:
-    name: Validate Godot Project
+  build-and-deploy:
+    name: Build & Deploy to GitHub Pages
     runs-on: ubuntu-latest
     container:
       image: barichello/godot-ci:4.4
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,7 +39,7 @@ jobs:
           godot --headless --quit 2>&1
           EXIT_CODE=$?
           if [ $EXIT_CODE -ne 0 ] && [ $EXIT_CODE -ne 1 ]; then
-            echo "::error::Godot validation failed with exit code $EXIT_CODE"
+            echo "::error::Godot validation failed"
             exit 1
           fi
 
@@ -42,15 +52,28 @@ jobs:
           unzip -o /tmp/templates.tpz -d /tmp/templates
           mv /tmp/templates/templates/* ~/.local/share/godot/export_templates/4.4.stable/
 
-          # Export
           cd game
           mkdir -p build
           godot --headless --export-release "Web" build/index.html 2>&1
 
-          # Verify export produced files
           if [ ! -f build/index.html ]; then
-            echo "::error::Web export failed — build/index.html not found"
+            echo "::error::Web export failed"
             exit 1
           fi
-          echo "Web export successful"
-          ls -la build/
+
+      - name: Inject coi-serviceworker
+        run: |
+          cd game/build
+          # Download coi-serviceworker for SharedArrayBuffer support
+          wget -q "https://raw.githubusercontent.com/nickvdp/coi-serviceworker/main/coi-serviceworker.min.js" -O coi-serviceworker.min.js
+          # Inject script tag into index.html (before closing </head>)
+          sed -i 's|</head>|<script src="coi-serviceworker.min.js"></script></head>|' index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: game/build
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
