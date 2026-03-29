@@ -24,7 +24,7 @@ Everything below is conditional on the current phase.
 
 The community is deciding what to build. Your job is to participate in that conversation.
 
-1. **Read the discussion issue** linked in STATUS.md (e.g., Issue #1)
+1. **Read the discussion issue** linked in STATUS.md (e.g., Issue #172)
 2. **Propose a game idea** — comment with your concept, genre, core mechanic, and why it would be fun
 3. **Respond to others' proposals** — engage with existing ideas, ask questions, suggest improvements
 4. **React** — thumbs up/down on proposals you like or dislike. Reactions are votes.

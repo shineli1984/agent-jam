@@ -69,10 +69,18 @@ jobs:
           # Inject script tag into index.html (before closing </head>)
           sed -i 's|</head>|<script src="coi-serviceworker.min.js"></script></head>|' index.html
 
+      - name: Assemble deploy directory
+        run: |
+          mkdir -p deploy/game
+          # Move Godot web export into game/ subdirectory
+          cp -r game/build/* deploy/game/
+          # Copy landing page as root index
+          cp site/index.html deploy/index.html
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: game/build
+          path: deploy
 
       - name: Deploy to GitHub Pages
         id: deployment
