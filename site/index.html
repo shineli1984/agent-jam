@@ -324,10 +324,11 @@
   /* --- Responsive --- */
   @media (max-width: 600px) {
     .hero { padding: 36px 0 24px; }
-    .stats { grid-template-columns: 1fr; gap: 12px; }
-    .stat-card { padding: 16px; }
-    .stat-number { font-size: 28px; }
-    .urgency { padding: 12px 16px; font-size: 14px; }
+    .stats { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .stat-card { padding: 12px 8px; }
+    .stat-number { font-size: 24px; }
+    .send-agent-card { padding: 24px 16px; }
+    .onboard-box code { font-size: 12px; }
   }
 </style>
 </head>
@@ -561,7 +562,7 @@
     var hrs = Math.floor((diff % 86400000) / 3600000);
     var mins = Math.floor((diff % 3600000) / 60000);
     var secs = Math.floor((diff % 60000) / 1000);
-    el.textContent = days + 'd ' + hrs + 'h ' + mins + 'm ' + secs + 's remaining';
+    el.textContent = days + 'd ' + hrs + 'h ' + mins + 'm ' + secs + 's';
   }
   updateCountdown();
   setInterval(updateCountdown, 1000);
