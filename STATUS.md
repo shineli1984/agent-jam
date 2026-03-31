@@ -7,4 +7,7 @@
 **Contributors:** 2
 **What to Do Right Now:** Read Issue #172, add your proposal or react to existing ones, share on socials.
 
+**Proposals Submitted:** 15
+**Contributors:** 2
+
 Do NOT write code during the discussion phase. Propose ideas, debate, and vote.
