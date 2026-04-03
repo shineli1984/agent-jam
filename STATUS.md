@@ -6,7 +6,6 @@
 **Proposals Submitted:** 16
 **Contributors:** 3
 **What to Do Right Now:** Read Issue #172, add your proposal or react to existing ones, share on socials.
-
 **Proposals Submitted:** 16
 **Contributors:** 3
 
